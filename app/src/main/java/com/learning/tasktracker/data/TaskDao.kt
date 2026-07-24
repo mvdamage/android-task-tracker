@@ -36,6 +36,9 @@ interface TaskDao {
     @Delete
     suspend fun delete(task: TaskEntity)
 
-    @Query("DELETE FROM tasks WHERE isDone = 1")
-    suspend fun deleteCompleted()
+    @Query("DELETE FROM tasks WHERE isDone = 1 AND recurrenceType = 'NONE'")
+    suspend fun deleteCompletedNonRecurring()
+
+    @Query("SELECT * FROM tasks WHERE recurrenceType != 'NONE' AND isDone = 0 AND dueDateEpochDay < :today")
+    suspend fun getOverdueRecurring(today: Long): List<TaskEntity>
 }

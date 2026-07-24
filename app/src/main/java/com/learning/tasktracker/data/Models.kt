@@ -11,3 +11,12 @@ enum class TaskFilter(val label: String) {
     ACTIVE("Активные"),
     DONE("Готово")
 }
+
+enum class RecurrenceType(val label: String) {
+    NONE("Не повторять"),
+    DAILY("Ежедневно"),
+    WEEKLY("Раз в неделю"),
+    MONTHLY("Раз в месяц"),
+    YEARLY("Раз в год"),
+    CUSTOM_DAYS("Свои дни")
+}

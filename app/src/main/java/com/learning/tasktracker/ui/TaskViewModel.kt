@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.Priority
+import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
 import com.learning.tasktracker.data.TaskRepository
@@ -89,11 +90,20 @@ class TaskViewModel(
         title: String,
         notes: String,
         priority: Priority,
-        dueDateEpochDay: Long
+        dueDateEpochDay: Long,
+        recurrenceType: RecurrenceType,
+        recurrenceWeekdayMask: Int
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
-            repository.add(title, notes, priority, dueDateEpochDay)
+            repository.add(
+                title = title,
+                notes = notes,
+                priority = priority,
+                dueDateEpochDay = dueDateEpochDay,
+                recurrenceType = recurrenceType,
+                recurrenceWeekdayMask = recurrenceWeekdayMask
+            )
         }
     }
 
@@ -102,7 +112,9 @@ class TaskViewModel(
         title: String,
         notes: String,
         priority: Priority,
-        dueDateEpochDay: Long
+        dueDateEpochDay: Long,
+        recurrenceType: RecurrenceType,
+        recurrenceWeekdayMask: Int
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -111,7 +123,9 @@ class TaskViewModel(
                     title = title.trim(),
                     notes = notes.trim(),
                     priority = priority,
-                    dueDateEpochDay = dueDateEpochDay
+                    dueDateEpochDay = dueDateEpochDay,
+                    recurrenceType = recurrenceType,
+                    recurrenceWeekdayMask = recurrenceWeekdayMask
                 )
             )
         }

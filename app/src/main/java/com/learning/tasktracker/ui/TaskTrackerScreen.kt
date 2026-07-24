@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Delete
@@ -40,6 +44,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,8 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.Priority
+import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -182,15 +189,24 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
         TaskEditorDialog(
             state = current,
             onDismiss = { editor = null },
-            onSave = { title, notes, priority, dueDate ->
+            onSave = { result ->
                 when (current) {
-                    is EditorState.Create -> viewModel.addTask(title, notes, priority, dueDate)
+                    is EditorState.Create -> viewModel.addTask(
+                        result.title,
+                        result.notes,
+                        result.priority,
+                        result.dueDateEpochDay,
+                        result.recurrenceType,
+                        result.recurrenceWeekdayMask
+                    )
                     is EditorState.Edit -> viewModel.updateTask(
                         current.task,
-                        title,
-                        notes,
-                        priority,
-                        dueDate
+                        result.title,
+                        result.notes,
+                        result.priority,
+                        result.dueDateEpochDay,
+                        result.recurrenceType,
+                        result.recurrenceWeekdayMask
                     )
                 }
                 editor = null
@@ -204,8 +220,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             title = { Text("Очистить выполненные?") },
             text = {
                 Text(
-                    "Будут удалены все задачи со статусом «Готово». " +
-                        "При наступлении нового дня выполненные задачи удаляются автоматически."
+                    "Будут удалены выполненные задачи без повторения. " +
+                        "Повторяющиеся задачи при отметке сразу переносятся на следующую дату."
                 )
             },
             confirmButton = {
@@ -330,6 +346,14 @@ private fun ChecklistItemRow(
                     style = MaterialTheme.typography.labelMedium,
                     color = if (overdue) OverdueRed else MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (task.isRecurring) {
+                    Text(
+                        text = "↻ ${DateUtils.recurrenceLabel(task.recurrenceType, task.recurrenceWeekdayMask)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
                 if (overdue) {
                     Text(
                         text = "просрочено",
@@ -365,12 +389,21 @@ private sealed interface EditorState {
     data class Edit(val task: TaskEntity) : EditorState
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private data class TaskEditorResult(
+    val title: String,
+    val notes: String,
+    val priority: Priority,
+    val dueDateEpochDay: Long,
+    val recurrenceType: RecurrenceType,
+    val recurrenceWeekdayMask: Int
+)
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun TaskEditorDialog(
     state: EditorState,
     onDismiss: () -> Unit,
-    onSave: (title: String, notes: String, priority: Priority, dueDateEpochDay: Long) -> Unit
+    onSave: (TaskEditorResult) -> Unit
 ) {
     val existing = (state as? EditorState.Edit)?.task
     var title by remember { mutableStateOf(existing?.title.orEmpty()) }
@@ -379,7 +412,15 @@ private fun TaskEditorDialog(
     var dueDateEpochDay by remember {
         mutableLongStateOf(existing?.dueDateEpochDay ?: DateUtils.todayEpochDay())
     }
+    var recurrenceType by remember {
+        mutableStateOf(existing?.recurrenceType ?: RecurrenceType.NONE)
+    }
+    var recurrenceWeekdayMask by remember {
+        mutableIntStateOf(existing?.recurrenceWeekdayMask ?: 0)
+    }
     var showDatePicker by remember { mutableStateOf(false) }
+
+    val customDaysValid = recurrenceType != RecurrenceType.CUSTOM_DAYS || recurrenceWeekdayMask != 0
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -387,7 +428,9 @@ private fun TaskEditorDialog(
             Text(if (existing == null) "Новая задача" else "Редактировать")
         },
         text = {
-            Column {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -431,6 +474,55 @@ private fun TaskEditorDialog(
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
+                    "Повторение",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    RecurrenceType.entries.forEach { value ->
+                        FilterChip(
+                            selected = recurrenceType == value,
+                            onClick = {
+                                recurrenceType = value
+                                if (value == RecurrenceType.CUSTOM_DAYS && recurrenceWeekdayMask == 0) {
+                                    recurrenceWeekdayMask = DateUtils.weekdayBit(dueDateEpochDay)
+                                }
+                            },
+                            label = { Text(value.label) }
+                        )
+                    }
+                }
+                if (recurrenceType == RecurrenceType.CUSTOM_DAYS) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Дни недели",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DayOfWeek.entries.forEach { day ->
+                            val bit = DateUtils.weekdayBit(day)
+                            FilterChip(
+                                selected = recurrenceWeekdayMask and bit != 0,
+                                onClick = {
+                                    recurrenceWeekdayMask =
+                                        DateUtils.toggleWeekdayInMask(recurrenceWeekdayMask, day)
+                                },
+                                label = { Text(DateUtils.weekdayChipLabel(day)) }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
                     "Приоритет",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -449,8 +541,23 @@ private fun TaskEditorDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(title, notes, priority, dueDateEpochDay) },
-                enabled = title.isNotBlank()
+                onClick = {
+                    onSave(
+                        TaskEditorResult(
+                            title = title,
+                            notes = notes,
+                            priority = priority,
+                            dueDateEpochDay = dueDateEpochDay,
+                            recurrenceType = recurrenceType,
+                            recurrenceWeekdayMask = if (recurrenceType == RecurrenceType.CUSTOM_DAYS) {
+                                recurrenceWeekdayMask
+                            } else {
+                                0
+                            }
+                        )
+                    )
+                },
+                enabled = title.isNotBlank() && customDaysValid
             ) {
                 Text("Сохранить")
             }
