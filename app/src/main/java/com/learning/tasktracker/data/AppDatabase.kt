@@ -23,7 +23,7 @@ class Converters {
     fun toRecurrenceType(value: String): RecurrenceType = RecurrenceType.valueOf(value)
 }
 
-@Database(entities = [TaskEntity::class], version = 3, exportSchema = false)
+@Database(entities = [TaskEntity::class], version = 4, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
@@ -52,6 +52,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN dueTimeMinutes INTEGER")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -62,7 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "task_tracker.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

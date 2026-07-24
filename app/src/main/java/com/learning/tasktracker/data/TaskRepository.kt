@@ -14,7 +14,8 @@ class TaskRepository(
         priority: Priority,
         dueDateEpochDay: Long = DateUtils.todayEpochDay(),
         recurrenceType: RecurrenceType = RecurrenceType.NONE,
-        recurrenceWeekdayMask: Int = 0
+        recurrenceWeekdayMask: Int = 0,
+        dueTimeMinutes: Int? = null
     ) {
         val alignedDue = DateUtils.alignToRecurrence(
             dueDateEpochDay,
@@ -28,7 +29,8 @@ class TaskRepository(
                 priority = priority,
                 dueDateEpochDay = alignedDue,
                 recurrenceType = recurrenceType,
-                recurrenceWeekdayMask = recurrenceWeekdayMask
+                recurrenceWeekdayMask = recurrenceWeekdayMask,
+                dueTimeMinutes = dueTimeMinutes
             )
         )
     }

@@ -15,6 +15,8 @@ interface TaskDao {
         SELECT * FROM tasks
         ORDER BY
             dueDateEpochDay ASC,
+            CASE WHEN dueTimeMinutes IS NULL THEN 1 ELSE 0 END ASC,
+            dueTimeMinutes ASC,
             isDone ASC,
             CASE priority
                 WHEN 'HIGH' THEN 0

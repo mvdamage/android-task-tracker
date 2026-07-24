@@ -39,9 +39,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -197,7 +199,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         result.priority,
                         result.dueDateEpochDay,
                         result.recurrenceType,
-                        result.recurrenceWeekdayMask
+                        result.recurrenceWeekdayMask,
+                        result.dueTimeMinutes
                     )
                     is EditorState.Edit -> viewModel.updateTask(
                         current.task,
@@ -206,7 +209,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         result.priority,
                         result.dueDateEpochDay,
                         result.recurrenceType,
-                        result.recurrenceWeekdayMask
+                        result.recurrenceWeekdayMask,
+                        result.dueTimeMinutes
                     )
                 }
                 editor = null
@@ -342,7 +346,7 @@ private fun ChecklistItemRow(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = DateUtils.formatShort(task.dueDateEpochDay),
+                    text = DateUtils.formatDueLabel(task.dueDateEpochDay, task.dueTimeMinutes),
                     style = MaterialTheme.typography.labelMedium,
                     color = if (overdue) OverdueRed else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -395,7 +399,8 @@ private data class TaskEditorResult(
     val priority: Priority,
     val dueDateEpochDay: Long,
     val recurrenceType: RecurrenceType,
-    val recurrenceWeekdayMask: Int
+    val recurrenceWeekdayMask: Int,
+    val dueTimeMinutes: Int?
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -418,7 +423,11 @@ private fun TaskEditorDialog(
     var recurrenceWeekdayMask by remember {
         mutableIntStateOf(existing?.recurrenceWeekdayMask ?: 0)
     }
+    var dueTimeMinutes by remember {
+        mutableStateOf(existing?.dueTimeMinutes)
+    }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     val customDaysValid = recurrenceType != RecurrenceType.CUSTOM_DAYS || recurrenceWeekdayMask != 0
 
@@ -470,6 +479,34 @@ private fun TaskEditorDialog(
                         selected = dueDateEpochDay != today && dueDateEpochDay != today + 1,
                         onClick = { showDatePicker = true },
                         label = { Text(DateUtils.formatShort(dueDateEpochDay)) }
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    "Время",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = dueTimeMinutes == null,
+                        onClick = { dueTimeMinutes = null },
+                        label = { Text("Без времени") }
+                    )
+                    FilterChip(
+                        selected = dueTimeMinutes != null,
+                        onClick = {
+                            if (dueTimeMinutes == null) {
+                                dueTimeMinutes = DateUtils.hourMinuteToMinutes(9, 0)
+                            }
+                            showTimePicker = true
+                        },
+                        label = {
+                            Text(
+                                dueTimeMinutes?.let { DateUtils.formatTime(it) } ?: "Указать время"
+                            )
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -553,7 +590,8 @@ private fun TaskEditorDialog(
                                 recurrenceWeekdayMask
                             } else {
                                 0
-                            }
+                            },
+                            dueTimeMinutes = dueTimeMinutes
                         )
                     )
                 },
@@ -595,5 +633,35 @@ private fun TaskEditorDialog(
         ) {
             DatePicker(state = pickerState)
         }
+    }
+
+    if (showTimePicker) {
+        val timePickerInitial = dueTimeMinutes ?: DateUtils.hourMinuteToMinutes(9, 0)
+        val (initialHour, initialMinute) = DateUtils.minutesToHourMinute(timePickerInitial)
+        val timePickerState = rememberTimePickerState(
+            initialHour = initialHour,
+            initialMinute = initialMinute
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Время") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        dueTimeMinutes = DateUtils.hourMinuteToMinutes(
+                            timePickerState.hour,
+                            timePickerState.minute
+                        )
+                        showTimePicker = false
+                    }
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("Отмена") }
+            },
+            text = {
+                TimePicker(state = timePickerState)
+            }
+        )
     }
 }

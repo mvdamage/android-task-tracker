@@ -3,6 +3,7 @@ package com.learning.tasktracker.data
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -14,6 +15,8 @@ object DateUtils {
         DateTimeFormatter.ofPattern("d MMMM yyyy", Locale("ru"))
     private val shortFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("d MMM", Locale("ru"))
+    private val timeFormatter: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("HH:mm", Locale("ru"))
 
     private val weekdayShortLabels = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
@@ -34,9 +37,35 @@ object DateUtils {
         }
     }
 
-    fun isOverdue(dueDateEpochDay: Long, isDone: Boolean, today: Long = todayEpochDay()): Boolean {
-        return !isDone && dueDateEpochDay < today
+    fun isOverdue(
+        dueDateEpochDay: Long,
+        dueTimeMinutes: Int?,
+        isDone: Boolean,
+        today: Long = todayEpochDay()
+    ): Boolean {
+        if (isDone) return false
+        if (dueDateEpochDay < today) return true
+        if (dueDateEpochDay > today) return false
+        val time = dueTimeMinutes ?: return false
+        return time < nowMinutesOfDay()
     }
+
+    fun nowMinutesOfDay(): Int {
+        val now = LocalTime.now(zone)
+        return now.hour * 60 + now.minute
+    }
+
+    fun formatTime(minutes: Int): String =
+        LocalTime.of(minutes / 60, minutes % 60).format(timeFormatter)
+
+    fun formatDueLabel(epochDay: Long, timeMinutes: Int?): String {
+        val date = formatShort(epochDay)
+        return if (timeMinutes != null) "$date, ${formatTime(timeMinutes)}" else date
+    }
+
+    fun minutesToHourMinute(minutes: Int): Pair<Int, Int> = minutes / 60 to minutes % 60
+
+    fun hourMinuteToMinutes(hour: Int, minute: Int): Int = hour * 60 + minute
 
     fun millisToEpochDay(millis: Long): Long =
         Instant.ofEpochMilli(millis).atZone(zone).toLocalDate().toEpochDay()
