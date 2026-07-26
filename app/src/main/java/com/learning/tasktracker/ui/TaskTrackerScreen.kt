@@ -149,6 +149,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 .onGloballyPositioned { coordinates ->
                     val bounds = coordinates.boundsInRoot()
                     dragState.updateOverlayOrigin(Offset(bounds.left, bounds.top))
+                    dragState.updateViewport(bounds)
                 }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -217,7 +218,6 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                                 val subtasks = state.subtasksByParentId[task.id].orEmpty()
                                 ChecklistItemRow(
                                     task = task,
-                                    day = group.groupKey,
                                     today = state.todayEpochDay,
                                     subtasksEnabled = state.subtasksEnabled,
                                     subtasks = subtasks,
@@ -354,7 +354,6 @@ private fun EmptyState(
 @Composable
 private fun ChecklistItemRow(
     task: TaskEntity,
-    day: Long,
     today: Long,
     subtasksEnabled: Boolean,
     subtasks: List<SubtaskEntity>,
@@ -370,7 +369,6 @@ private fun ChecklistItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .dayDropZone(day, dragState)
             .draggingRowAlpha(task, dragState)
             .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top

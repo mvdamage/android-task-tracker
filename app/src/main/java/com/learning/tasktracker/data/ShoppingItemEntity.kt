@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class ShoppingItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
+    val categoryId: Long? = null,
     val isChecked: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()

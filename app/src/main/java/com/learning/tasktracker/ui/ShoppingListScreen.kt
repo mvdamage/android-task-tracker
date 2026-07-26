@@ -18,15 +18,19 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -42,6 +46,8 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +61,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.learning.tasktracker.data.ShoppingCategoryEntity
 import com.learning.tasktracker.data.ShoppingItemEntity
 import com.learning.tasktracker.ui.components.AnyDoDivider
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
@@ -69,10 +76,20 @@ private val quickExamples = listOf("Молоко", "Хлеб", "Яйца", "Сы
 fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val titleHistory by viewModel.titleHistory.collectAsStateWithLifecycle()
+    val pendingDeleteCategory by viewModel.pendingDeleteCategory.collectAsStateWithLifecycle()
     var newItemTitle by remember { mutableStateOf("") }
+    var selectedCategoryId by remember { mutableLongStateOf(0L) }
     var showInput by remember { mutableStateOf(false) }
+    var showCategoriesSheet by remember { mutableStateOf(false) }
     var confirmClearChecked by remember { mutableStateOf(false) }
+    var deleteCategoryItemCount by remember { mutableIntStateOf(0) }
     val inputFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(pendingDeleteCategory) {
+        deleteCategoryItemCount = pendingDeleteCategory?.let {
+            viewModel.itemsInCategoryCount(it.id)
+        } ?: 0
+    }
 
     LaunchedEffect(showInput) {
         if (showInput) {
@@ -86,10 +103,16 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
 
     fun addCurrentItem() {
         if (newItemTitle.isNotBlank()) {
-            viewModel.addItem(newItemTitle)
+            val categoryId = selectedCategoryId.takeIf { it > 0L }
+            viewModel.addItem(newItemTitle, categoryId)
             newItemTitle = ""
+            selectedCategoryId = 0L
             showInput = false
         }
+    }
+
+    val categoryById = remember(state.categories) {
+        state.categories.associateBy { it.id }
     }
 
     Scaffold(
@@ -106,6 +129,13 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showCategoriesSheet = true }) {
+                        Icon(
+                            Icons.Outlined.Category,
+                            contentDescription = "Категории",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (state.checkedCount > 0) {
                         IconButton(onClick = { confirmClearChecked = true }) {
                             Icon(
@@ -177,6 +207,14 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                             onSelect = { newItemTitle = it }
                         )
                     }
+                    if (state.categories.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CategoryPickerRow(
+                            categories = state.categories,
+                            selectedCategoryId = selectedCategoryId,
+                            onSelect = { selectedCategoryId = it }
+                        )
+                    }
                 }
             } else {
                 QuickAddBar(
@@ -225,6 +263,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                         ) {
                             ShoppingItemRow(
                                 item = item,
+                                category = item.categoryId?.let { categoryById[it] },
                                 onToggle = { viewModel.toggleChecked(item) }
                             )
                         }
@@ -233,6 +272,19 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 }
             }
         }
+    }
+
+    if (showCategoriesSheet) {
+        ShoppingCategoriesSheet(
+            categories = state.categories,
+            pendingDeleteCategory = pendingDeleteCategory,
+            itemsInPendingDeleteCategory = deleteCategoryItemCount,
+            onAddCategory = viewModel::addCategory,
+            onRequestDeleteCategory = viewModel::requestDeleteCategory,
+            onConfirmDeleteCategory = viewModel::confirmDeleteCategory,
+            onDismissDeleteCategory = viewModel::dismissDeleteCategory,
+            onDismiss = { showCategoriesSheet = false }
+        )
     }
 
     if (confirmClearChecked) {
@@ -272,8 +324,52 @@ private fun pluralCheckedItems(count: Int): String {
 }
 
 @Composable
+private fun CategoryPickerRow(
+    categories: List<ShoppingCategoryEntity>,
+    selectedCategoryId: Long,
+    onSelect: (Long) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = selectedCategoryId == 0L,
+                onClick = { onSelect(0L) },
+                label = { Text("Без категории") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
+        items(categories, key = { it.id }) { category ->
+            val color = ShoppingCategoryPresets.colorFromArgb(category.colorArgb)
+            FilterChip(
+                selected = selectedCategoryId == category.id,
+                onClick = { onSelect(category.id) },
+                label = { Text(category.name) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = ShoppingCategoryPresets.iconForKey(category.iconKey),
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = color.copy(alpha = 0.18f),
+                    selectedLabelColor = color
+                )
+            )
+        }
+    }
+}
+
+@Composable
 private fun ShoppingItemRow(
     item: ShoppingItemEntity,
+    category: ShoppingCategoryEntity?,
     onToggle: () -> Unit
 ) {
     Row(
@@ -286,6 +382,12 @@ private fun ShoppingItemRow(
             checked = item.isChecked,
             onCheckedChange = onToggle
         )
+        if (category != null) {
+            ShoppingCategoryBadge(
+                category = category,
+                modifier = Modifier.padding(start = 10.dp)
+            )
+        }
         Text(
             text = item.title,
             style = MaterialTheme.typography.bodyLarge,
@@ -297,7 +399,7 @@ private fun ShoppingItemRow(
             textDecoration = if (item.isChecked) TextDecoration.LineThrough else null,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 14.dp),
+                .padding(start = if (category != null) 10.dp else 14.dp),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )

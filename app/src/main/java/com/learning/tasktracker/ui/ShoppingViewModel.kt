@@ -3,16 +3,20 @@ package com.learning.tasktracker.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.learning.tasktracker.data.ShoppingCategoryEntity
 import com.learning.tasktracker.data.ShoppingItemEntity
 import com.learning.tasktracker.data.ShoppingRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class ShoppingUiState(
     val items: List<ShoppingItemEntity> = emptyList(),
+    val categories: List<ShoppingCategoryEntity> = emptyList(),
     val activeCount: Int = 0,
     val checkedCount: Int = 0
 )
@@ -20,10 +24,11 @@ data class ShoppingUiState(
 class ShoppingViewModel(
     private val repository: ShoppingRepository
 ) : ViewModel() {
-    val uiState: StateFlow<ShoppingUiState> = repository.observeItems()
-        .map { items ->
+    val uiState: StateFlow<ShoppingUiState> = repository.observeShoppingData()
+        .map { (items, categories) ->
             ShoppingUiState(
                 items = items,
+                categories = categories,
                 activeCount = items.count { !it.isChecked },
                 checkedCount = items.count { it.isChecked }
             )
@@ -48,9 +53,12 @@ class ShoppingViewModel(
             emptyList()
         )
 
-    fun addItem(title: String) {
+    private val _pendingDeleteCategory = MutableStateFlow<ShoppingCategoryEntity?>(null)
+    val pendingDeleteCategory: StateFlow<ShoppingCategoryEntity?> = _pendingDeleteCategory
+
+    fun addItem(title: String, categoryId: Long? = null) {
         if (title.isBlank()) return
-        viewModelScope.launch { repository.add(title) }
+        viewModelScope.launch { repository.add(title, categoryId) }
     }
 
     fun toggleChecked(item: ShoppingItemEntity) {
@@ -64,6 +72,32 @@ class ShoppingViewModel(
     fun clearChecked() {
         viewModelScope.launch { repository.clearChecked() }
     }
+
+    fun addCategory(name: String, colorArgb: Long, iconKey: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch { repository.addCategory(name, colorArgb, iconKey) }
+    }
+
+    fun requestDeleteCategory(category: ShoppingCategoryEntity) {
+        viewModelScope.launch {
+            _pendingDeleteCategory.value = category
+        }
+    }
+
+    fun confirmDeleteCategory() {
+        val category = _pendingDeleteCategory.value ?: return
+        viewModelScope.launch {
+            repository.deleteCategory(category)
+            _pendingDeleteCategory.value = null
+        }
+    }
+
+    fun dismissDeleteCategory() {
+        _pendingDeleteCategory.value = null
+    }
+
+    suspend fun itemsInCategoryCount(categoryId: Long): Int =
+        repository.countItemsInCategory(categoryId)
 
     class Factory(private val repository: ShoppingRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

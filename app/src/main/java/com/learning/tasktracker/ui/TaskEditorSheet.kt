@@ -94,7 +94,12 @@ internal fun TaskEditorSheet(
     var notes by remember(state) { mutableStateOf(existing?.notes.orEmpty()) }
     var priority by remember(state) { mutableStateOf(existing?.priority ?: Priority.MEDIUM) }
     var dueDateEpochDay by remember(state) {
-        mutableStateOf(existing?.dueDateEpochDay)
+        mutableStateOf(
+            when (state) {
+                is EditorState.Edit -> state.task.dueDateEpochDay
+                EditorState.Create -> DateUtils.todayEpochDay()
+            }
+        )
     }
     var recurrenceType by remember(state) {
         mutableStateOf(existing?.recurrenceType ?: RecurrenceType.NONE)
