@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -36,6 +37,20 @@ class TaskViewModel(
 ) : ViewModel() {
     private val filter = MutableStateFlow(TaskFilter.ALL)
     private val todayTick = MutableStateFlow(DateUtils.todayEpochDay())
+
+    val titleHistory: StateFlow<List<String>> = repository.observeTasks()
+        .map { tasks ->
+            tasks.groupBy { it.title.trim() }
+                .filterKeys { it.isNotEmpty() }
+                .entries
+                .sortedByDescending { (_, group) -> group.maxOf { it.updatedAt } }
+                .map { it.key }
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            emptyList()
+        )
 
     val uiState: StateFlow<TaskUiState> = combine(
         repository.observeTasks(),
@@ -145,6 +160,25 @@ class TaskViewModel(
 
     fun clearCompleted() {
         viewModelScope.launch { repository.clearCompleted() }
+    }
+
+    companion object {
+        fun filterTitleSuggestions(history: List<String>, query: String, limit: Int = 5): List<String> {
+            val trimmed = query.trim()
+            if (trimmed.isEmpty()) return emptyList()
+            return history
+                .asSequence()
+                .filter { it.contains(trimmed, ignoreCase = true) }
+                .filter { !it.equals(trimmed, ignoreCase = true) }
+                .sortedWith(
+                    compareBy(
+                        { !it.startsWith(trimmed, ignoreCase = true) },
+                        { it.lowercase() }
+                    )
+                )
+                .take(limit)
+                .toList()
+        }
     }
 
     class Factory(private val repository: TaskRepository) : ViewModelProvider.Factory {

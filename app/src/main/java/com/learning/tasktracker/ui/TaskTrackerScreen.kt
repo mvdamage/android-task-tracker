@@ -75,6 +75,7 @@ private val OverdueBg = Color(0xFFFFEBEE)
 @Composable
 fun TaskTrackerScreen(viewModel: TaskViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val titleHistory by viewModel.titleHistory.collectAsStateWithLifecycle()
     var editor by remember { mutableStateOf<EditorState?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -190,6 +191,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     editor?.let { current ->
         TaskEditorDialog(
             state = current,
+            titleHistory = titleHistory,
             onDismiss = { editor = null },
             onSave = { result ->
                 when (current) {
@@ -407,6 +409,7 @@ private data class TaskEditorResult(
 @Composable
 private fun TaskEditorDialog(
     state: EditorState,
+    titleHistory: List<String>,
     onDismiss: () -> Unit,
     onSave: (TaskEditorResult) -> Unit
 ) {
@@ -429,6 +432,10 @@ private fun TaskEditorDialog(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
+    val titleSuggestions = remember(title, titleHistory) {
+        TaskViewModel.filterTitleSuggestions(titleHistory, title)
+    }
+
     val customDaysValid = recurrenceType != RecurrenceType.CUSTOM_DAYS || recurrenceWeekdayMask != 0
 
     AlertDialog(
@@ -447,6 +454,33 @@ private fun TaskEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (titleSuggestions.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Подсказки",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        titleSuggestions.forEach { suggestion ->
+                            FilterChip(
+                                selected = false,
+                                onClick = { title = suggestion },
+                                label = {
+                                    Text(
+                                        text = suggestion,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = notes,

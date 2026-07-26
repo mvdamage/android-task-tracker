@@ -9,7 +9,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.learning.tasktracker.ui.TaskTrackerScreen
+import com.learning.tasktracker.ui.MainScreen
+import com.learning.tasktracker.ui.ShoppingViewModel
 import com.learning.tasktracker.ui.TaskViewModel
 import com.learning.tasktracker.ui.theme.TaskTrackerTheme
 
@@ -20,20 +21,26 @@ class MainActivity : ComponentActivity() {
         val app = application as TaskTrackerApp
         setContent {
             TaskTrackerTheme {
-                val viewModel: TaskViewModel = viewModel(
+                val taskViewModel: TaskViewModel = viewModel(
                     factory = TaskViewModel.Factory(app.repository)
                 )
+                val shoppingViewModel: ShoppingViewModel = viewModel(
+                    factory = ShoppingViewModel.Factory(app.shoppingRepository)
+                )
                 val lifecycleOwner = LocalLifecycleOwner.current
-                DisposableEffect(lifecycleOwner, viewModel) {
+                DisposableEffect(lifecycleOwner, taskViewModel) {
                     val observer = LifecycleEventObserver { _, event ->
                         if (event == Lifecycle.Event.ON_START) {
-                            viewModel.onAppVisible()
+                            taskViewModel.onAppVisible()
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
                     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                 }
-                TaskTrackerScreen(viewModel = viewModel)
+                MainScreen(
+                    taskViewModel = taskViewModel,
+                    shoppingViewModel = shoppingViewModel
+                )
             }
         }
     }
