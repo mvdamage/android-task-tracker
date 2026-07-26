@@ -59,7 +59,6 @@ import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.components.HorizontalSuggestionPills
 import com.learning.tasktracker.ui.components.QuickAddBar
 import com.learning.tasktracker.ui.components.ShoppingProgressBar
-import com.learning.tasktracker.ui.theme.extendedColors
 
 private val quickExamples = listOf("Молоко", "Хлеб", "Яйца", "Сыр", "Овощи")
 
@@ -70,6 +69,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     val titleHistory by viewModel.titleHistory.collectAsStateWithLifecycle()
     var newItemTitle by remember { mutableStateOf("") }
     var showInput by remember { mutableStateOf(false) }
+    var confirmClearChecked by remember { mutableStateOf(false) }
     var confirmClearAll by remember { mutableStateOf(false) }
 
     val suggestions = remember(newItemTitle, titleHistory) {
@@ -99,7 +99,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 },
                 actions = {
                     if (state.checkedCount > 0) {
-                        IconButton(onClick = viewModel::clearChecked) {
+                        IconButton(onClick = { confirmClearChecked = true }) {
                             Icon(
                                 Icons.Outlined.DeleteSweep,
                                 contentDescription = "Очистить купленное",
@@ -199,6 +199,14 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     total = state.items.size,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                 )
+                if (state.checkedCount > 0) {
+                    TextButton(
+                        onClick = { confirmClearChecked = true },
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    ) {
+                        Text("Очистить купленное (${state.checkedCount})")
+                    }
+                }
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
@@ -226,6 +234,30 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
         }
     }
 
+    if (confirmClearChecked) {
+        AlertDialog(
+            onDismissRequest = { confirmClearChecked = false },
+            title = { Text("Очистить купленное?") },
+            text = {
+                Text(
+                    "Будут удалены ${state.checkedCount} " +
+                        pluralCheckedItems(state.checkedCount) + " из списка."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearChecked()
+                        confirmClearChecked = false
+                    }
+                ) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearChecked = false }) { Text("Отмена") }
+            }
+        )
+    }
+
     if (confirmClearAll) {
         AlertDialog(
             onDismissRequest = { confirmClearAll = false },
@@ -243,6 +275,17 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 TextButton(onClick = { confirmClearAll = false }) { Text("Отмена") }
             }
         )
+    }
+}
+
+private fun pluralCheckedItems(count: Int): String {
+    val mod10 = count % 10
+    val mod100 = count % 100
+    return when {
+        mod100 in 11..14 -> "купленных товаров"
+        mod10 == 1 -> "купленный товар"
+        mod10 in 2..4 -> "купленных товара"
+        else -> "купленных товаров"
     }
 }
 

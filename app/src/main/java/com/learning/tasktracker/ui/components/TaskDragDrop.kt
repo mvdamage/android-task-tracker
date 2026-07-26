@@ -207,7 +207,7 @@ fun DaySectionHeader(
     day: Long,
     dragState: TaskDayDragState,
     modifier: Modifier = Modifier,
-    topPadding: androidx.compose.ui.unit.Dp = 4.dp
+    topPadding: androidx.compose.ui.unit.Dp = 0.dp
 ) {
     val hovered = dragState.isDragging && dragState.hoveredDay == day
     Text(
@@ -220,16 +220,17 @@ fun DaySectionHeader(
         },
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(
+            .then(
                 if (hovered) {
-                    MaterialTheme.colorScheme.primaryContainer
+                    Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
                 } else {
-                    MaterialTheme.colorScheme.background
+                    Modifier
                 }
             )
             .dayDropZone(day, dragState)
-            .padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = 8.dp)
+            .padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = 4.dp)
     )
 }
 

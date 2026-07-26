@@ -16,8 +16,6 @@ interface TaskDao {
         ORDER BY
             CASE WHEN dueDateEpochDay IS NULL THEN 1 ELSE 0 END,
             dueDateEpochDay ASC,
-            CASE WHEN dueTimeMinutes IS NULL THEN 1 ELSE 0 END ASC,
-            dueTimeMinutes ASC,
             isDone ASC,
             CASE priority
                 WHEN 'HIGH' THEN 0
@@ -25,6 +23,8 @@ interface TaskDao {
                 WHEN 'LOW' THEN 2
                 ELSE 3
             END ASC,
+            CASE WHEN dueTimeMinutes IS NULL THEN 1 ELSE 0 END ASC,
+            dueTimeMinutes ASC,
             updatedAt DESC
         """
     )

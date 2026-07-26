@@ -159,31 +159,36 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
 
-                FilterSegmentRow(
-                    items = TaskFilter.entries.map { filter ->
-                        filter.label to { viewModel.setFilter(filter) }
-                    },
-                    selectedIndex = TaskFilter.entries.indexOf(state.filter),
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-                )
-
-                if (state.groups.isEmpty()) {
-                    EmptyState(
-                        filter = state.filter,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .padding(32.dp)
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        bottom = 8.dp
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            bottom = 8.dp
+                ) {
+                    item(key = "filter_row") {
+                        FilterSegmentRow(
+                            items = TaskFilter.entries.map { filter ->
+                                filter.label to { viewModel.setFilter(filter) }
+                            },
+                            selectedIndex = TaskFilter.entries.indexOf(state.filter),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
                         )
-                    ) {
+                    }
+
+                    if (state.groups.isEmpty()) {
+                        item(key = "empty_state") {
+                            EmptyState(
+                                filter = state.filter,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 32.dp)
+                            )
+                        }
+                    } else {
                         if (dragState.isDragging) {
                             item(key = "quick_drop_targets") {
                                 Column {
@@ -206,7 +211,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                                     title = group.title,
                                     day = group.groupKey,
                                     dragState = dragState,
-                                    topPadding = if (groupIndex == 0 && !dragState.isDragging) 4.dp else if (groupIndex == 0) 0.dp else 16.dp
+                                    topPadding = if (groupIndex == 0) 0.dp else 12.dp
                                 )
                             }
                             items(group.tasks, key = { it.id }) { task ->
@@ -295,7 +300,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             text = {
                 Text(
                     "Будут удалены выполненные задачи без повторения. " +
-                        "Повторяющиеся задачи при отметке сразу переносятся на следующую дату."
+                        "Повторяющиеся задачи при отметке остаются выполненными на текущий день, " +
+                            "а следующее повторение создаётся на новую дату."
                 )
             },
             confirmButton = {

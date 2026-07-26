@@ -10,10 +10,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -106,14 +107,8 @@ fun QuickAddBar(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        CircularTaskCheckbox(
-            checked = false,
-            onCheckedChange = {},
-            size = 22.dp
-        )
         Text(
             text = placeholder,
             style = MaterialTheme.typography.bodyLarge,
@@ -136,8 +131,8 @@ fun FilterSegmentRow(
             val selected = index == selectedIndex
             Column(
                 modifier = Modifier
-                    .clickable(onClick = onClick)
-                    .wrapContentWidth(),
+                    .width(IntrinsicSize.Max)
+                    .clickable(onClick = onClick),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(

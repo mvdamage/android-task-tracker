@@ -97,8 +97,19 @@ class TaskRepository(
             if (next != null) {
                 dao.update(
                     task.copy(
+                        isDone = true,
+                        recurrenceType = RecurrenceType.NONE,
+                        recurrenceWeekdayMask = 0,
+                        recurrenceEndEpochDay = null,
+                        updatedAt = now
+                    )
+                )
+                dao.insert(
+                    task.copy(
+                        id = 0,
                         isDone = false,
                         dueDateEpochDay = next,
+                        createdAt = now,
                         updatedAt = now
                     )
                 )
