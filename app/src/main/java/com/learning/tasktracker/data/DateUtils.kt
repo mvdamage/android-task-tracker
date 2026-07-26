@@ -28,6 +28,12 @@ object DateUtils {
 
     fun formatShort(epochDay: Long): String = fromEpochDay(epochDay).format(shortFormatter)
 
+    fun formatTodayHeader(today: Long = todayEpochDay()): String {
+        val date = fromEpochDay(today)
+        val dayMonth = date.format(DateTimeFormatter.ofPattern("d MMMM", Locale("ru")))
+        return if (today == todayEpochDay()) "Сегодня, $dayMonth" else formatFull(today)
+    }
+
     fun sectionTitle(epochDay: Long, today: Long = todayEpochDay()): String {
         return when (epochDay) {
             today -> "Сегодня"
