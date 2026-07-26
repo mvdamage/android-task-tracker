@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -84,23 +86,16 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
-                    Column {
-                        Text(
-                            "Покупки",
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (state.items.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            ShoppingProgressBar(
-                                checked = state.checkedCount,
-                                total = state.items.size
-                            )
-                        }
-                    }
+                    Text(
+                        "Покупки",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                 },
                 actions = {
                     if (state.checkedCount > 0) {
@@ -130,6 +125,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showInput = true },
+                modifier = Modifier.padding(bottom = 8.dp),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
@@ -144,7 +140,11 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 .padding(padding)
         ) {
             if (showInput) {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                        .imePadding()
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -189,16 +189,23 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 ShoppingEmptyState(
                     onQuickAdd = { viewModel.addItem(it) },
                     modifier = Modifier
-                        .fillMaxSize()
+                        .weight(1f)
+                        .fillMaxWidth()
                         .padding(32.dp)
                 )
             } else {
+                ShoppingProgressBar(
+                    checked = state.checkedCount,
+                    total = state.items.size,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
                 LazyColumn(
+                    modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 8.dp,
-                        bottom = 88.dp
+                        top = 4.dp,
+                        bottom = 8.dp
                     )
                 ) {
                     items(state.items, key = { it.id }) { item ->

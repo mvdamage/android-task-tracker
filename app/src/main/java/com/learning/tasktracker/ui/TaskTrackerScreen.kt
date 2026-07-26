@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,6 +44,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,8 +86,10 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
                     Column {
                         Text(
@@ -128,6 +134,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { editor = EditorState.Create },
+                modifier = Modifier.padding(bottom = 8.dp),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
@@ -136,88 +143,94 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             }
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .onGloballyPositioned { coordinates ->
+                    val bounds = coordinates.boundsInRoot()
+                    dragState.updateOverlayOrigin(Offset(bounds.left, bounds.top))
+                }
         ) {
-            QuickAddBar(
-                placeholder = "Добавить задачу…",
-                onClick = { editor = EditorState.Create },
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-
-            FilterSegmentRow(
-                items = TaskFilter.entries.map { filter ->
-                    filter.label to { viewModel.setFilter(filter) }
-                },
-                selectedIndex = TaskFilter.entries.indexOf(state.filter),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-            )
-
-            if (state.groups.isEmpty()) {
-                EmptyState(
-                    filter = state.filter,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp)
+            Column(modifier = Modifier.fillMaxSize()) {
+                QuickAddBar(
+                    placeholder = "Добавить задачу…",
+                    onClick = { editor = EditorState.Create },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
-            } else {
-                Box(modifier = Modifier.weight(1f)) {
+
+                FilterSegmentRow(
+                    items = TaskFilter.entries.map { filter ->
+                        filter.label to { viewModel.setFilter(filter) }
+                    },
+                    selectedIndex = TaskFilter.entries.indexOf(state.filter),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+                )
+
+                if (state.groups.isEmpty()) {
+                    EmptyState(
+                        filter = state.filter,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(32.dp)
+                    )
+                } else {
                     LazyColumn(
+                        modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
-                            bottom = 88.dp
+                            bottom = 8.dp
                         )
                     ) {
-                    if (dragState.isDragging) {
-                        item(key = "quick_drop_targets") {
-                            Column {
-                                Text(
-                                    text = "Перетащите на день",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        if (dragState.isDragging) {
+                            item(key = "quick_drop_targets") {
+                                Column {
+                                    Text(
+                                        text = "Перетащите на день",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                                    )
+                                    QuickDropDayRow(
+                                        today = state.todayEpochDay,
+                                        dragState = dragState
+                                    )
+                                }
+                            }
+                        }
+                        state.groups.forEachIndexed { groupIndex, group ->
+                            item(key = "header_${group.groupKey}") {
+                                DaySectionHeader(
+                                    title = group.title,
+                                    day = group.groupKey,
+                                    dragState = dragState,
+                                    topPadding = if (groupIndex == 0 && !dragState.isDragging) 4.dp else if (groupIndex == 0) 0.dp else 16.dp
                                 )
-                                QuickDropDayRow(
+                            }
+                            items(group.tasks, key = { it.id }) { task ->
+                                val subtasks = state.subtasksByParentId[task.id].orEmpty()
+                                ChecklistItemRow(
+                                    task = task,
+                                    day = group.groupKey,
                                     today = state.todayEpochDay,
-                                    dragState = dragState
+                                    subtasksEnabled = state.subtasksEnabled,
+                                    subtasks = subtasks,
+                                    dragState = dragState,
+                                    onToggle = { viewModel.toggleDone(task) },
+                                    onToggleSubtask = viewModel::toggleSubtask,
+                                    onEdit = { editor = EditorState.Edit(task) },
+                                    onMoveToDay = viewModel::moveTaskToDay
                                 )
+                                AnyDoDivider()
                             }
                         }
                     }
-                    state.groups.forEachIndexed { groupIndex, group ->
-                        item(key = "header_${group.groupKey}") {
-                            DaySectionHeader(
-                                title = group.title,
-                                day = group.groupKey,
-                                dragState = dragState,
-                                topPadding = if (groupIndex == 0 && !dragState.isDragging) 4.dp else if (groupIndex == 0) 0.dp else 16.dp
-                            )
-                        }
-                        items(group.tasks, key = { it.id }) { task ->
-                            val subtasks = state.subtasksByParentId[task.id].orEmpty()
-                            ChecklistItemRow(
-                                task = task,
-                                day = group.groupKey,
-                                today = state.todayEpochDay,
-                                subtasksEnabled = state.subtasksEnabled,
-                                subtasks = subtasks,
-                                dragState = dragState,
-                                onToggle = { viewModel.toggleDone(task) },
-                                onToggleSubtask = viewModel::toggleSubtask,
-                                onEdit = { editor = EditorState.Edit(task) },
-                                onMoveToDay = viewModel::moveTaskToDay
-                            )
-                            AnyDoDivider()
-                        }
-                    }
-                    }
-                    dragState.draggedTask?.let { dragged ->
-                        TaskDragGhost(task = dragged, dragState = dragState)
-                    }
                 }
+            }
+            dragState.draggedTask?.let { dragged ->
+                TaskDragGhost(task = dragged, dragState = dragState)
             }
         }
     }

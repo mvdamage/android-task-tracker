@@ -3,10 +3,13 @@ package com.learning.tasktracker.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DragHandle
@@ -53,6 +56,8 @@ class TaskDayDragState {
         private set
     var dragPosition by mutableStateOf(Offset.Unspecified)
         private set
+    var overlayOrigin by mutableStateOf(Offset.Zero)
+        private set
     private val dropBounds = mutableStateMapOf<Long, Rect>()
 
     val isDragging: Boolean get() = draggedTask != null
@@ -66,6 +71,10 @@ class TaskDayDragState {
     fun updateDragPosition(position: Offset) {
         dragPosition = position
         hoveredDay = dropBounds.entries.firstOrNull { (_, rect) -> rect.contains(position) }?.key
+    }
+
+    fun updateOverlayOrigin(origin: Offset) {
+        overlayOrigin = origin
     }
 
     fun registerDropZone(day: Long, rect: Rect) {
@@ -161,6 +170,7 @@ fun TaskDragGhost(
     modifier: Modifier = Modifier
 ) {
     val position = dragState.dragPosition
+    val origin = dragState.overlayOrigin
     if (!dragState.isDragging || position == Offset.Unspecified) return
 
     Box(
@@ -168,8 +178,8 @@ fun TaskDragGhost(
             .zIndex(100f)
             .offset {
                 IntOffset(
-                    x = (position.x - 120.dp.toPx()).roundToInt().coerceAtLeast(0),
-                    y = (position.y - 28.dp.toPx()).roundToInt().coerceAtLeast(0)
+                    x = (position.x - origin.x - 100.dp.toPx()).roundToInt().coerceAtLeast(0),
+                    y = (position.y - origin.y - 36.dp.toPx()).roundToInt().coerceAtLeast(0)
                 )
             }
     ) {
@@ -229,19 +239,21 @@ fun QuickDropDayRow(
     dragState: TaskDayDragState,
     modifier: Modifier = Modifier
 ) {
-    androidx.compose.foundation.layout.Row(
+    val chips = listOf(
+        today to "Сегодня",
+        today + 1 to "Завтра",
+        today + 2 to "Послезавтра",
+        today + 7 to "+7 дней",
+        DateUtils.UNDATED_GROUP_KEY to "Без даты"
+    )
+    LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
+            .padding(vertical = 6.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
     ) {
-        listOf(
-            today to "Сегодня",
-            today + 1 to "Завтра",
-            today + 2 to "Послезавтра",
-            today + 7 to "+7 дней",
-            DateUtils.UNDATED_GROUP_KEY to "Без даты"
-        ).forEach { (day, label) ->
+        items(chips, key = { it.first }) { (day, label) ->
             DropDayChip(label = label, day = day, dragState = dragState)
         }
     }
