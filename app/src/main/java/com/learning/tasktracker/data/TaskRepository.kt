@@ -95,24 +95,26 @@ class TaskRepository(
                 task.recurrenceEndEpochDay
             )
             if (next != null) {
-                dao.update(
-                    task.copy(
-                        isDone = true,
-                        recurrenceType = RecurrenceType.NONE,
-                        recurrenceWeekdayMask = 0,
-                        recurrenceEndEpochDay = null,
-                        updatedAt = now
-                    )
+                val completed = task.copy(isDone = true, updatedAt = now)
+                val spawned = task.copy(
+                    id = 0,
+                    isDone = false,
+                    dueDateEpochDay = next,
+                    createdAt = now,
+                    updatedAt = now
                 )
-                dao.insert(
-                    task.copy(
-                        id = 0,
-                        isDone = false,
-                        dueDateEpochDay = next,
-                        createdAt = now,
-                        updatedAt = now
+                val newTaskId = dao.completeRecurringOccurrence(completed, spawned)
+                subtaskDao.listForParent(task.id).forEach { subtask ->
+                    subtaskDao.insert(
+                        subtask.copy(
+                            id = 0,
+                            parentTaskId = newTaskId,
+                            isDone = false,
+                            createdAt = now,
+                            updatedAt = now
+                        )
                     )
-                )
+                }
                 return
             }
             dao.update(task.copy(isDone = true, updatedAt = now))
@@ -149,7 +151,7 @@ class TaskRepository(
     }
 
     suspend fun clearCompleted() {
-        dao.deleteCompletedNonRecurring()
+        dao.deleteCompleted()
     }
 
     suspend fun processDayRolloverIfNeeded(today: Long = DateUtils.todayEpochDay()) {
@@ -159,7 +161,7 @@ class TaskRepository(
             return
         }
         if (last < today) {
-            dao.deleteCompletedNonRecurring()
+            dao.deleteCompleted()
             dao.getOverdueRecurring(today).forEach { task ->
                 val end = task.recurrenceEndEpochDay
                 if (end != null && today > end) {

@@ -19,6 +19,9 @@ interface SubtaskDao {
     @Query("SELECT COUNT(*) FROM subtasks WHERE parentTaskId = :parentTaskId")
     suspend fun countForParent(parentTaskId: Long): Int
 
+    @Query("SELECT * FROM subtasks WHERE parentTaskId = :parentTaskId ORDER BY sortOrder ASC, id ASC")
+    suspend fun listForParent(parentTaskId: Long): List<SubtaskEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(subtask: SubtaskEntity): Long
 

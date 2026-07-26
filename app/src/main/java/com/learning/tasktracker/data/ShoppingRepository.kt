@@ -27,8 +27,4 @@ class ShoppingRepository(private val dao: ShoppingDao) {
     suspend fun clearChecked() {
         dao.deleteChecked()
     }
-
-    suspend fun clearAll() {
-        dao.deleteAll()
-    }
 }

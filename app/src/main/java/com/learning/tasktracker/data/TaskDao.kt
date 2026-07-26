@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -36,11 +37,17 @@ interface TaskDao {
     @Update
     suspend fun update(task: TaskEntity)
 
+    @Transaction
+    suspend fun completeRecurringOccurrence(completed: TaskEntity, next: TaskEntity): Long {
+        update(completed)
+        return insert(next)
+    }
+
     @Delete
     suspend fun delete(task: TaskEntity)
 
-    @Query("DELETE FROM tasks WHERE isDone = 1 AND recurrenceType = 'NONE'")
-    suspend fun deleteCompletedNonRecurring()
+    @Query("DELETE FROM tasks WHERE isDone = 1")
+    suspend fun deleteCompleted()
 
     @Query(
         """

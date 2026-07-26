@@ -23,7 +23,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.AlertDialog
@@ -41,12 +40,15 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
@@ -70,7 +72,13 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     var newItemTitle by remember { mutableStateOf("") }
     var showInput by remember { mutableStateOf(false) }
     var confirmClearChecked by remember { mutableStateOf(false) }
-    var confirmClearAll by remember { mutableStateOf(false) }
+    val inputFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(showInput) {
+        if (showInput) {
+            inputFocusRequester.requestFocus()
+        }
+    }
 
     val suggestions = remember(newItemTitle, titleHistory) {
         TaskViewModel.filterTitleSuggestions(titleHistory, newItemTitle)
@@ -103,15 +111,6 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                             Icon(
                                 Icons.Outlined.DeleteSweep,
                                 contentDescription = "Очистить купленное",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    if (state.items.isNotEmpty()) {
-                        IconButton(onClick = { confirmClearAll = true }) {
-                            Icon(
-                                Icons.Outlined.DeleteOutline,
-                                contentDescription = "Очистить весь список",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -154,7 +153,9 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                             onValueChange = { newItemTitle = it },
                             placeholder = { Text("Что купить?") },
                             singleLine = true,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(inputFocusRequester),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { addCurrentItem() }),
                             colors = TextFieldDefaults.colors(
@@ -254,25 +255,6 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { confirmClearChecked = false }) { Text("Отмена") }
-            }
-        )
-    }
-
-    if (confirmClearAll) {
-        AlertDialog(
-            onDismissRequest = { confirmClearAll = false },
-            title = { Text("Очистить список?") },
-            text = { Text("Будут удалены все товары — и купленные, и некупленные.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.clearAll()
-                        confirmClearAll = false
-                    }
-                ) { Text("Удалить") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClearAll = false }) { Text("Отмена") }
             }
         )
     }
