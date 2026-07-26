@@ -111,6 +111,13 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
         }
     }
 
+    fun addFromSuggestion(title: String) {
+        viewModel.addSuggestedItem(title)
+        newItemTitle = ""
+        selectedCategoryId = 0L
+        showInput = false
+    }
+
     val categoryById = remember(state.categories) {
         state.categories.associateBy { it.id }
     }
@@ -219,7 +226,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                         )
                         HorizontalSuggestionPills(
                             suggestions = suggestions,
-                            onSelect = { newItemTitle = it }
+                            onSelect = ::addFromSuggestion
                         )
                     }
                     if (state.categories.isNotEmpty()) {
@@ -240,7 +247,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 if (quickSuggestions.isNotEmpty()) {
                     HorizontalSuggestionPills(
                         suggestions = quickSuggestions,
-                        onSelect = { viewModel.addItem(it) },
+                        onSelect = viewModel::addSuggestedItem,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                     )
                 }
@@ -248,7 +255,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
 
             if (state.items.isEmpty()) {
                 ShoppingEmptyState(
-                    onQuickAdd = { viewModel.addItem(it) },
+                    onQuickAdd = viewModel::addSuggestedItem,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()

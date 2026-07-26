@@ -60,12 +60,31 @@ class ShoppingViewModel(
             emptyList()
         )
 
+    private val categoryByTitle = repository.observeItems()
+        .map { items ->
+            items.groupBy { it.title.trim().lowercase() }
+                .mapValues { (_, group) ->
+                    group.maxByOrNull { it.updatedAt }?.categoryId
+                }
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            emptyMap()
+        )
+
     private val _pendingDeleteCategory = MutableStateFlow<ShoppingCategoryEntity?>(null)
     val pendingDeleteCategory: StateFlow<ShoppingCategoryEntity?> = _pendingDeleteCategory
 
     fun addItem(title: String, categoryId: Long? = null) {
         if (title.isBlank()) return
         viewModelScope.launch { repository.add(title, categoryId) }
+    }
+
+    fun addSuggestedItem(title: String) {
+        if (title.isBlank()) return
+        val categoryId = categoryByTitle.value[title.trim().lowercase()]
+        addItem(title, categoryId)
     }
 
     fun toggleChecked(item: ShoppingItemEntity) {
