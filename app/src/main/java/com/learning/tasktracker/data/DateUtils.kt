@@ -103,34 +103,41 @@ object DateUtils {
         }
     }
 
-    /** Next occurrence strictly after [currentDue]. */
+    /** Next occurrence strictly after [currentDue], or null if none within [endEpochDay]. */
     fun nextDueDate(
         currentDue: Long,
         type: RecurrenceType,
         interval: Int = 1,
-        weekdayMask: Int = 0
+        weekdayMask: Int = 0,
+        endEpochDay: Long? = null
     ): Long? {
         if (type == RecurrenceType.NONE) return null
         val step = interval.coerceAtLeast(1)
         val current = fromEpochDay(currentDue)
-        return when (type) {
+        val rawNext = when (type) {
             RecurrenceType.NONE -> null
             RecurrenceType.DAILY -> current.plusDays(step.toLong()).toEpochDay()
             RecurrenceType.WEEKLY -> current.plusWeeks(step.toLong()).toEpochDay()
             RecurrenceType.MONTHLY -> current.plusMonths(step.toLong()).toEpochDay()
             RecurrenceType.YEARLY -> current.plusYears(step.toLong()).toEpochDay()
             RecurrenceType.CUSTOM_DAYS -> {
-                if (weekdayMask == 0) return null
-                var date = current.plusDays(1)
-                repeat(370) {
-                    if (weekdayBit(date.dayOfWeek) and weekdayMask != 0) {
-                        return date.toEpochDay()
+                if (weekdayMask == 0) null
+                else {
+                    var date = current.plusDays(1)
+                    var found: Long? = null
+                    repeat(370) {
+                        if (found != null) return@repeat
+                        if (weekdayBit(date.dayOfWeek) and weekdayMask != 0) {
+                            found = date.toEpochDay()
+                        } else {
+                            date = date.plusDays(1)
+                        }
                     }
-                    date = date.plusDays(1)
+                    found
                 }
-                null
             }
-        }
+        } ?: return null
+        return if (endEpochDay != null && rawNext > endEpochDay) null else rawNext
     }
 
     /** Align due date to the nearest matching weekday on or after [dueDate]. */
@@ -156,17 +163,20 @@ object DateUtils {
         today: Long,
         type: RecurrenceType,
         interval: Int,
-        weekdayMask: Int
+        weekdayMask: Int,
+        endEpochDay: Long? = null
     ): Long {
         if (type == RecurrenceType.NONE || dueDate >= today) return dueDate
         var due = dueDate
         repeat(400) {
             if (due >= today) return due
-            val next = nextDueDate(due, type, interval, weekdayMask) ?: return due
+            val next = nextDueDate(due, type, interval, weekdayMask, endEpochDay) ?: return due
             due = next
         }
         return due
     }
+
+    fun formatRecurrenceEnd(endEpochDay: Long): String = "до ${formatShort(endEpochDay)}"
 
     fun weekdayChipLabel(dayOfWeek: DayOfWeek): String = weekdayShortLabels[dayOfWeek.value - 1]
 }

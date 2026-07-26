@@ -4,9 +4,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,26 +17,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ShoppingCart
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -47,9 +42,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
@@ -57,8 +49,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.learning.tasktracker.data.ShoppingItemEntity
-import com.learning.tasktracker.ui.components.AnimatedCheckboxScale
+import com.learning.tasktracker.ui.components.AnyDoDivider
+import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.components.HorizontalSuggestionPills
+import com.learning.tasktracker.ui.components.QuickAddBar
 import com.learning.tasktracker.ui.components.ShoppingProgressBar
 import com.learning.tasktracker.ui.theme.extendedColors
 
@@ -70,7 +64,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val titleHistory by viewModel.titleHistory.collectAsStateWithLifecycle()
     var newItemTitle by remember { mutableStateOf("") }
-    val extended = MaterialTheme.extendedColors
+    var showInput by remember { mutableStateOf(false) }
 
     val suggestions = remember(newItemTitle, titleHistory) {
         TaskViewModel.filterTitleSuggestions(titleHistory, newItemTitle)
@@ -80,30 +74,26 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
         if (newItemTitle.isNotBlank()) {
             viewModel.addItem(newItemTitle)
             newItemTitle = ""
+            showInput = false
         }
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            "Список покупок",
-                            fontWeight = FontWeight.Bold,
-                            color = extended.shoppingPrimary
+                            "Покупки",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold
                         )
                         if (state.items.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
                             ShoppingProgressBar(
                                 checked = state.checkedCount,
                                 total = state.items.size
-                            )
-                        } else {
-                            Text(
-                                "Добавьте товары в плашку ниже",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -113,7 +103,8 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                         IconButton(onClick = viewModel::clearChecked) {
                             Icon(
                                 Icons.Outlined.DeleteSweep,
-                                contentDescription = "Очистить купленное"
+                                contentDescription = "Очистить купленное",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -122,6 +113,16 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     containerColor = MaterialTheme.colorScheme.background
                 )
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showInput = true },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Добавить товар")
+            }
         }
     ) { padding ->
         Column(
@@ -129,24 +130,63 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            ShoppingInputPanel(
-                title = newItemTitle,
-                onTitleChange = { newItemTitle = it },
-                suggestions = suggestions,
-                onAdd = ::addCurrentItem,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-            )
+            if (showInput) {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = newItemTitle,
+                            onValueChange = { newItemTitle = it },
+                            placeholder = { Text("Что купить?") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { addCurrentItem() }),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                            )
+                        )
+                        IconButton(
+                            onClick = ::addCurrentItem,
+                            enabled = newItemTitle.isNotBlank()
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Добавить")
+                        }
+                    }
+                    if (suggestions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HorizontalSuggestionPills(
+                            suggestions = suggestions,
+                            onSelect = { newItemTitle = it }
+                        )
+                    }
+                }
+            } else {
+                QuickAddBar(
+                    placeholder = "Добавить в список…",
+                    onClick = { showInput = true },
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+            }
 
             if (state.items.isEmpty()) {
                 ShoppingEmptyState(
                     onQuickAdd = { viewModel.addItem(it) },
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp)
+                        .padding(32.dp)
                 )
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp)
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 88.dp
+                    )
                 ) {
                     items(state.items, key = { it.id }) { item ->
                         AnimatedVisibility(
@@ -156,105 +196,11 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                         ) {
                             ShoppingItemRow(
                                 item = item,
-                                onToggle = { viewModel.toggleChecked(item) },
-                                onDelete = { viewModel.delete(item) }
+                                onToggle = { viewModel.toggleChecked(item) }
                             )
                         }
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                        )
+                        AnyDoDivider()
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ShoppingInputPanel(
-    title: String,
-    onTitleChange: (String) -> Unit,
-    suggestions: List<String>,
-    onAdd: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val extended = MaterialTheme.extendedColors
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            extended.shoppingContainer,
-                            MaterialTheme.colorScheme.surface
-                        )
-                    )
-                )
-                .padding(16.dp)
-        ) {
-            Column {
-                Text(
-                    "Добавить в список",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = extended.onShoppingContainer
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(start = 4.dp, end = 4.dp)
-                ) {
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = onTitleChange,
-                        placeholder = { Text("Товар") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { onAdd() })
-                    )
-                    IconButton(
-                        onClick = onAdd,
-                        enabled = title.isNotBlank(),
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(
-                                if (title.isNotBlank()) extended.shoppingPrimary
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            )
-                    ) {
-                        Icon(
-                            Icons.Filled.Add,
-                            contentDescription = "Добавить",
-                            tint = if (title.isNotBlank()) Color.White
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                if (suggestions.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        "Подсказки",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = extended.onShoppingContainer
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    HorizontalSuggestionPills(
-                        suggestions = suggestions,
-                        onSelect = onTitleChange
-                    )
                 }
             }
         }
@@ -264,21 +210,18 @@ private fun ShoppingInputPanel(
 @Composable
 private fun ShoppingItemRow(
     item: ShoppingItemEntity,
-    onToggle: () -> Unit,
-    onDelete: () -> Unit
+    onToggle: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AnimatedCheckboxScale(checked = item.isChecked) {
-            Checkbox(
-                checked = item.isChecked,
-                onCheckedChange = { onToggle() }
-            )
-        }
+        CircularTaskCheckbox(
+            checked = item.isChecked,
+            onCheckedChange = onToggle
+        )
         Text(
             text = item.title,
             style = MaterialTheme.typography.bodyLarge,
@@ -288,17 +231,12 @@ private fun ShoppingItemRow(
                 MaterialTheme.colorScheme.onSurface
             },
             textDecoration = if (item.isChecked) TextDecoration.LineThrough else null,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 14.dp),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Outlined.Delete,
-                contentDescription = "Удалить",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
     }
 }
 
@@ -307,7 +245,6 @@ private fun ShoppingEmptyState(
     onQuickAdd: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val extended = MaterialTheme.extendedColors
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -316,28 +253,29 @@ private fun ShoppingEmptyState(
         Icon(
             imageVector = Icons.Outlined.ShoppingCart,
             contentDescription = null,
-            tint = extended.shoppingPrimary,
-            modifier = Modifier.size(72.dp)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+            modifier = Modifier.size(56.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            "Список покупок пуст",
+            "Список пуст",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Добавьте товары через плашку сверху\nили выберите пример:",
+            "Нажмите + или строку выше",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             quickExamples.take(3).forEach { example ->
-                FilterChip(
-                    selected = false,
-                    onClick = { onQuickAdd(example) },
-                    label = { Text(example) }
+                Text(
+                    text = example,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onQuickAdd(example) }
                 )
             }
         }

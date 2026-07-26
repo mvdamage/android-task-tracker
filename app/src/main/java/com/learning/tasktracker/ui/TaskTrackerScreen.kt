@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,22 +16,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,20 +42,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.learning.tasktracker.data.DateUtils
+import com.learning.tasktracker.data.SubtaskEntity
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
-import com.learning.tasktracker.ui.components.AnimatedCheckboxScale
+import com.learning.tasktracker.ui.components.AnyDoDivider
+import com.learning.tasktracker.ui.components.CircularTaskCheckbox
+import com.learning.tasktracker.ui.components.FilterSegmentRow
 import com.learning.tasktracker.ui.components.PriorityDot
-import com.learning.tasktracker.ui.components.StatBadge
+import com.learning.tasktracker.ui.components.QuickAddBar
+import com.learning.tasktracker.ui.components.TaskListTitle
 import com.learning.tasktracker.ui.theme.extendedColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,50 +66,51 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     val titleHistory by viewModel.titleHistory.collectAsStateWithLifecycle()
     var editor by remember { mutableStateOf<EditorState?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     val extended = MaterialTheme.extendedColors
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            DateUtils.formatTodayHeader(state.todayEpochDay),
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
+                            text = DateUtils.formatTodayHeader(state.todayEpochDay),
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StatBadge("${state.activeCount} активных")
-                            if (state.doneCount > 0) {
-                                StatBadge(
-                                    text = "${state.doneCount} готово",
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (state.overdueCount > 0) {
-                                StatBadge(
-                                    text = "${state.overdueCount} просрочено",
-                                    containerColor = extended.overdueContainer,
-                                    contentColor = extended.overdue
-                                )
-                            }
+                        if (state.overdueCount > 0) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${state.overdueCount} просрочено",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = extended.overdue
+                            )
                         }
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(
+                            Icons.Outlined.Settings,
+                            contentDescription = "Настройки",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (state.doneCount > 0) {
                         IconButton(onClick = { confirmClear = true }) {
                             Icon(
                                 Icons.Outlined.DeleteSweep,
-                                contentDescription = "Очистить выполненные"
+                                contentDescription = "Очистить выполненные",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background
                 )
             )
         },
@@ -122,7 +118,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             FloatingActionButton(
                 onClick = { editor = EditorState.Create },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Новая задача")
             }
@@ -133,62 +130,68 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            FilterRow(
-                selected = state.filter,
-                onSelect = viewModel::setFilter,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            QuickAddBar(
+                placeholder = "Добавить задачу…",
+                onClick = { editor = EditorState.Create },
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+
+            FilterSegmentRow(
+                items = TaskFilter.entries.map { filter ->
+                    filter.label to { viewModel.setFilter(filter) }
+                },
+                selectedIndex = TaskFilter.entries.indexOf(state.filter),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
             )
 
             if (state.groups.isEmpty()) {
                 EmptyState(
                     filter = state.filter,
-                    onAddClick = { editor = EditorState.Create },
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp)
+                        .padding(32.dp)
                 )
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(
-                        start = 12.dp,
-                        end = 12.dp,
-                        top = 4.dp,
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 8.dp,
                         bottom = 88.dp
                     )
                 ) {
                     state.groups.forEach { group ->
-                        val groupOverdue = group.dueDateEpochDay < state.todayEpochDay
                         item(key = "header_${group.dueDateEpochDay}") {
                             Text(
-                                text = group.title,
+                                text = group.title.uppercase(),
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (groupOverdue) extended.overdue else MaterialTheme.colorScheme.primary,
+                                color = extended.sectionHeader,
                                 modifier = Modifier.padding(
-                                    start = 8.dp,
-                                    end = 8.dp,
-                                    top = 14.dp,
-                                    bottom = 6.dp
+                                    start = 4.dp,
+                                    end = 4.dp,
+                                    top = 20.dp,
+                                    bottom = 8.dp
                                 )
                             )
                         }
                         items(group.tasks, key = { it.id }) { task ->
+                            val subtasks = state.subtasksByParentId[task.id].orEmpty()
                             AnimatedVisibility(
                                 visible = true,
-                                enter = fadeIn() + slideInVertically { it / 3 },
-                                exit = fadeOut() + slideOutVertically { -it / 3 }
+                                enter = fadeIn() + slideInVertically { it / 4 },
+                                exit = fadeOut() + slideOutVertically { -it / 4 }
                             ) {
                                 ChecklistItemRow(
                                     task = task,
                                     today = state.todayEpochDay,
+                                    subtasksEnabled = state.subtasksEnabled,
+                                    subtasks = subtasks,
                                     onToggle = { viewModel.toggleDone(task) },
-                                    onEdit = { editor = EditorState.Edit(task) },
-                                    onDelete = { viewModel.delete(task) }
+                                    onToggleSubtask = viewModel::toggleSubtask,
+                                    onEdit = { editor = EditorState.Edit(task) }
                                 )
                             }
-                            HorizontalDivider(
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                            )
+                            AnyDoDivider()
                         }
                     }
                 }
@@ -197,9 +200,20 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     }
 
     editor?.let { current ->
+        val editTaskId = (current as? EditorState.Edit)?.task?.id
         TaskEditorSheet(
             state = current,
             titleHistory = titleHistory,
+            subtasksEnabled = state.subtasksEnabled,
+            subtasks = editTaskId?.let { state.subtasksByParentId[it] }.orEmpty(),
+            onAddSubtask = { title -> editTaskId?.let { viewModel.addSubtask(it, title) } },
+            onToggleSubtask = viewModel::toggleSubtask,
+            onDeleteSubtask = viewModel::deleteSubtask,
+            onDeleteTask = if (current is EditorState.Edit) {
+                { viewModel.delete(current.task); editor = null }
+            } else {
+                null
+            },
             onDismiss = { editor = null },
             onSave = { result ->
                 when (current) {
@@ -210,6 +224,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         result.dueDateEpochDay,
                         result.recurrenceType,
                         result.recurrenceWeekdayMask,
+                        result.recurrenceEndEpochDay,
                         result.dueTimeMinutes
                     )
                     is EditorState.Edit -> viewModel.updateTask(
@@ -220,11 +235,20 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         result.dueDateEpochDay,
                         result.recurrenceType,
                         result.recurrenceWeekdayMask,
+                        result.recurrenceEndEpochDay,
                         result.dueTimeMinutes
                     )
                 }
                 editor = null
             }
+        )
+    }
+
+    if (showSettings) {
+        SettingsSheet(
+            subtasksEnabled = state.subtasksEnabled,
+            onSubtasksEnabledChange = viewModel::setSubtasksEnabled,
+            onDismiss = { showSettings = false }
         )
     }
 
@@ -254,29 +278,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
 }
 
 @Composable
-private fun FilterRow(
-    selected: TaskFilter,
-    onSelect: (TaskFilter) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        TaskFilter.entries.forEach { filter ->
-            FilterChip(
-                selected = selected == filter,
-                onClick = { onSelect(filter) },
-                label = { Text(filter.label) }
-            )
-        }
-    }
-}
-
-@Composable
 private fun EmptyState(
     filter: TaskFilter,
-    onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -284,34 +287,26 @@ private fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Outlined.TaskAlt,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(72.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = when (filter) {
-                TaskFilter.ALL -> "Пока нет задач"
-                TaskFilter.ACTIVE -> "Нет активных задач"
-                TaskFilter.DONE -> "Нет выполненных задач"
+                TaskFilter.ALL -> "Нет задач"
+                TaskFilter.ACTIVE -> "Всё выполнено!"
+                TaskFilter.DONE -> "Нет выполненных"
             },
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Создайте первую задачу — планировать день станет проще",
+            text = when (filter) {
+                TaskFilter.ALL -> "Нажмите + или строку выше, чтобы добавить"
+                TaskFilter.ACTIVE -> "Отличная работа — можно отдохнуть"
+                TaskFilter.DONE -> "Выполненные задачи появятся здесь"
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(onClick = onAddClick) {
-            Icon(Icons.Filled.Add, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Добавить задачу")
-        }
     }
 }
 
@@ -319,97 +314,131 @@ private fun EmptyState(
 private fun ChecklistItemRow(
     task: TaskEntity,
     today: Long,
+    subtasksEnabled: Boolean,
+    subtasks: List<SubtaskEntity>,
     onToggle: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onToggleSubtask: (SubtaskEntity) -> Unit,
+    onEdit: () -> Unit
 ) {
     val extended = MaterialTheme.extendedColors
     val overdue = task.isOverdue(today)
-    val rowBg = when {
-        overdue -> extended.overdueContainer
-        task.isDone -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        else -> Color.Transparent
-    }
-    val titleColor = when {
-        overdue -> extended.overdue
-        task.isDone -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> MaterialTheme.colorScheme.onSurface
-    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .drawBehind {
-                if (overdue) {
-                    drawRect(
-                        color = extended.overdue,
-                        size = Size(4.dp.toPx(), size.height)
-                    )
-                }
-            }
-            .background(rowBg)
             .clickable(onClick = onEdit)
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 4.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        AnimatedCheckboxScale(checked = task.isDone) {
-            Checkbox(
-                checked = task.isDone,
-                onCheckedChange = { onToggle() },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = if (overdue) extended.overdue else MaterialTheme.colorScheme.primary,
-                    uncheckedColor = if (overdue) extended.overdue else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
+        CircularTaskCheckbox(
+            checked = task.isDone,
+            onCheckedChange = onToggle,
+            modifier = Modifier.padding(top = 2.dp),
+            checkedColor = if (overdue && !task.isDone) extended.overdue else extended.checkboxChecked
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 14.dp)
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (!task.isDone) {
-                    PriorityDot(priority = task.priority)
-                }
-                Text(
+                PriorityDot(priority = task.priority)
+                TaskListTitle(
                     text = task.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (overdue) FontWeight.SemiBold else FontWeight.Normal,
-                    color = titleColor,
-                    textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
-                    maxLines = 2,
+                    done = task.isDone,
+                    overdue = overdue && !task.isDone
+                )
+            }
+            val subtitle = buildTaskSubtitle(task, today, subtasksEnabled, subtasks)
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (overdue && !task.isDone) {
+                        extended.overdue
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(top = 2.dp),
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = DateUtils.formatDueLabel(task.dueDateEpochDay, task.dueTimeMinutes),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (overdue) extended.overdue else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (task.isRecurring) {
-                    Text(
-                        text = "↻ ${DateUtils.recurrenceLabel(task.recurrenceType, task.recurrenceWeekdayMask)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                if (overdue) {
-                    Text(
-                        text = "просрочено",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = extended.overdue,
-                        fontWeight = FontWeight.Bold
+            if (subtasksEnabled && subtasks.isNotEmpty()) {
+                subtasks.forEach { subtask ->
+                    SubtaskRow(
+                        subtask = subtask,
+                        onToggle = { onToggleSubtask(subtask) }
                     )
                 }
             }
         }
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Outlined.Delete,
-                contentDescription = "Удалить",
-                tint = if (overdue) extended.overdue else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        Icon(
+            imageVector = Icons.Outlined.MoreHoriz,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier
+                .size(20.dp)
+                .padding(top = 4.dp)
+        )
+    }
+}
+
+private fun buildTaskSubtitle(
+    task: TaskEntity,
+    today: Long,
+    subtasksEnabled: Boolean,
+    subtasks: List<SubtaskEntity>
+): String {
+    val parts = mutableListOf<String>()
+    if (task.dueTimeMinutes != null) {
+        parts += DateUtils.formatTime(task.dueTimeMinutes)
+    }
+    if (task.isRecurring) {
+        parts += DateUtils.recurrenceLabel(task.recurrenceType, task.recurrenceWeekdayMask)
+        task.recurrenceEndEpochDay?.let { parts += DateUtils.formatRecurrenceEnd(it) }
+    }
+    if (subtasksEnabled && subtasks.isNotEmpty()) {
+        val doneCount = subtasks.count { it.isDone }
+        parts += "$doneCount/${subtasks.size}"
+    }
+    if (task.isOverdue(today) && !task.isDone) {
+        parts += "просрочено"
+    }
+    return parts.joinToString(" · ")
+}
+
+@Composable
+private fun SubtaskRow(
+    subtask: SubtaskEntity,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircularTaskCheckbox(
+            checked = subtask.isDone,
+            onCheckedChange = onToggle,
+            size = 20.dp
+        )
+        Text(
+            text = subtask.title,
+            modifier = Modifier.padding(start = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (subtask.isDone) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            textDecoration = if (subtask.isDone) TextDecoration.LineThrough else null,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

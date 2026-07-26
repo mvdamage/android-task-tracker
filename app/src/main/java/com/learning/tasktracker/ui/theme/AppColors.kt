@@ -14,29 +14,41 @@ data class ExtendedColors(
     val priorityHigh: Color,
     val shoppingPrimary: Color,
     val shoppingContainer: Color,
-    val onShoppingContainer: Color
+    val onShoppingContainer: Color,
+    val checkboxUnchecked: Color,
+    val checkboxChecked: Color,
+    val sectionHeader: Color,
+    val divider: Color
 )
 
 val LightExtendedColors = ExtendedColors(
-    overdue = Color(0xFFB71C1C),
-    overdueContainer = Color(0xFFFFEBEE),
-    priorityLow = Color(0xFF2E7D32),
-    priorityMedium = Color(0xFFEF6C00),
-    priorityHigh = Color(0xFFC62828),
-    shoppingPrimary = Color(0xFF2E7D32),
-    shoppingContainer = Color(0xFFE8F5E9),
-    onShoppingContainer = Color(0xFF1B5E20)
+    overdue = Color(0xFFFF3B30),
+    overdueContainer = Color(0xFFFFEBEA),
+    priorityLow = Color(0xFF8E8E93),
+    priorityMedium = Color(0xFF8E8E93),
+    priorityHigh = Color(0xFFFF9500),
+    shoppingPrimary = Color(0xFF0095FF),
+    shoppingContainer = Color(0xFFE8F4FF),
+    onShoppingContainer = Color(0xFF0077CC),
+    checkboxUnchecked = Color(0xFFC7C7CC),
+    checkboxChecked = Color(0xFF0095FF),
+    sectionHeader = Color(0xFF8E8E93),
+    divider = Color(0xFFE5E5EA)
 )
 
 val DarkExtendedColors = ExtendedColors(
-    overdue = Color(0xFFFF8A80),
-    overdueContainer = Color(0xFF4A1C1C),
-    priorityLow = Color(0xFF81C784),
-    priorityMedium = Color(0xFFFFB74D),
-    priorityHigh = Color(0xFFEF5350),
-    shoppingPrimary = Color(0xFF81C784),
-    shoppingContainer = Color(0xFF1B3A1F),
-    onShoppingContainer = Color(0xFFC8E6C9)
+    overdue = Color(0xFFFF453A),
+    overdueContainer = Color(0xFF3A1C1C),
+    priorityLow = Color(0xFF8E8E93),
+    priorityMedium = Color(0xFF8E8E93),
+    priorityHigh = Color(0xFFFF9F0A),
+    shoppingPrimary = Color(0xFF0095FF),
+    shoppingContainer = Color(0xFF003A66),
+    onShoppingContainer = Color(0xFFB3DAFF),
+    checkboxUnchecked = Color(0xFF48484A),
+    checkboxChecked = Color(0xFF0095FF),
+    sectionHeader = Color(0xFF8E8E93),
+    divider = Color(0xFF38383A)
 )
 
 val LocalExtendedColors = staticCompositionLocalOf { LightExtendedColors }

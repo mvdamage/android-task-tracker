@@ -8,12 +8,14 @@ import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
-import com.learning.tasktracker.data.TaskRepository
+import com.learning.tasktracker.data.SettingsStore
+import com.learning.tasktracker.data.SubtaskEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import com.learning.tasktracker.data.TaskRepository
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -29,11 +31,14 @@ data class TaskUiState(
     val activeCount: Int = 0,
     val doneCount: Int = 0,
     val overdueCount: Int = 0,
-    val todayEpochDay: Long = DateUtils.todayEpochDay()
+    val todayEpochDay: Long = DateUtils.todayEpochDay(),
+    val subtasksEnabled: Boolean = false,
+    val subtasksByParentId: Map<Long, List<SubtaskEntity>> = emptyMap()
 )
 
 class TaskViewModel(
-    private val repository: TaskRepository
+    private val repository: TaskRepository,
+    private val settingsStore: SettingsStore
 ) : ViewModel() {
     private val filter = MutableStateFlow(TaskFilter.ALL)
     private val todayTick = MutableStateFlow(DateUtils.todayEpochDay())
@@ -54,9 +59,12 @@ class TaskViewModel(
 
     val uiState: StateFlow<TaskUiState> = combine(
         repository.observeTasks(),
+        repository.observeSubtasks(),
         filter,
-        todayTick
-    ) { tasks, selectedFilter, today ->
+        todayTick,
+        settingsStore.subtasksEnabled
+    ) { tasks, subtasks, selectedFilter, today, subtasksEnabled ->
+        val subtasksByParentId = subtasks.groupBy { it.parentTaskId }
         val filtered = when (selectedFilter) {
             TaskFilter.ALL -> tasks
             TaskFilter.ACTIVE -> tasks.filter { !it.isDone }
@@ -78,7 +86,9 @@ class TaskViewModel(
             activeCount = tasks.count { !it.isDone },
             doneCount = tasks.count { it.isDone },
             overdueCount = tasks.count { it.isOverdue(today) },
-            todayEpochDay = today
+            todayEpochDay = today,
+            subtasksEnabled = subtasksEnabled,
+            subtasksByParentId = subtasksByParentId
         )
     }.stateIn(
         viewModelScope,
@@ -108,6 +118,7 @@ class TaskViewModel(
         dueDateEpochDay: Long,
         recurrenceType: RecurrenceType,
         recurrenceWeekdayMask: Int,
+        recurrenceEndEpochDay: Long?,
         dueTimeMinutes: Int?
     ) {
         if (title.isBlank()) return
@@ -119,6 +130,7 @@ class TaskViewModel(
                 dueDateEpochDay = dueDateEpochDay,
                 recurrenceType = recurrenceType,
                 recurrenceWeekdayMask = recurrenceWeekdayMask,
+                recurrenceEndEpochDay = recurrenceEndEpochDay,
                 dueTimeMinutes = dueTimeMinutes
             )
         }
@@ -132,6 +144,7 @@ class TaskViewModel(
         dueDateEpochDay: Long,
         recurrenceType: RecurrenceType,
         recurrenceWeekdayMask: Int,
+        recurrenceEndEpochDay: Long?,
         dueTimeMinutes: Int?
     ) {
         if (title.isBlank()) return
@@ -144,6 +157,7 @@ class TaskViewModel(
                     dueDateEpochDay = dueDateEpochDay,
                     recurrenceType = recurrenceType,
                     recurrenceWeekdayMask = recurrenceWeekdayMask,
+                    recurrenceEndEpochDay = recurrenceEndEpochDay,
                     dueTimeMinutes = dueTimeMinutes
                 )
             )
@@ -160,6 +174,23 @@ class TaskViewModel(
 
     fun clearCompleted() {
         viewModelScope.launch { repository.clearCompleted() }
+    }
+
+    fun setSubtasksEnabled(enabled: Boolean) {
+        settingsStore.setSubtasksEnabled(enabled)
+    }
+
+    fun addSubtask(parentTaskId: Long, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch { repository.addSubtask(parentTaskId, title) }
+    }
+
+    fun toggleSubtask(subtask: SubtaskEntity) {
+        viewModelScope.launch { repository.toggleSubtask(subtask) }
+    }
+
+    fun deleteSubtask(subtask: SubtaskEntity) {
+        viewModelScope.launch { repository.deleteSubtask(subtask) }
     }
 
     companion object {
@@ -181,10 +212,13 @@ class TaskViewModel(
         }
     }
 
-    class Factory(private val repository: TaskRepository) : ViewModelProvider.Factory {
+    class Factory(
+        private val repository: TaskRepository,
+        private val settingsStore: SettingsStore
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return TaskViewModel(repository) as T
+            return TaskViewModel(repository, settingsStore) as T
         }
     }
 }

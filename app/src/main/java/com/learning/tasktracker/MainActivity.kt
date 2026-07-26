@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             TaskTrackerTheme {
                 val taskViewModel: TaskViewModel = viewModel(
-                    factory = TaskViewModel.Factory(app.repository)
+                    factory = TaskViewModel.Factory(app.repository, app.settingsStore)
                 )
                 val shoppingViewModel: ShoppingViewModel = viewModel(
                     factory = ShoppingViewModel.Factory(app.shoppingRepository)

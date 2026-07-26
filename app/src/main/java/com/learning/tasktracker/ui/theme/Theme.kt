@@ -8,42 +8,47 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
-private val Blue = Color(0xFF0F3D68)
-private val BlueSoft = Color(0xFF1F5F96)
-private val Sky = Color(0xFF7EC8FF)
-private val Paper = Color(0xFFF3F7FB)
-private val Ink = Color(0xFF102033)
+private val AnyDoBlue = Color(0xFF0095FF)
+private val AnyDoBlueDark = Color(0xFF0077CC)
+private val AnyDoBlueLight = Color(0xFFE8F4FF)
+private val Ink = Color(0xFF1A1A1A)
+private val InkMuted = Color(0xFF8E8E93)
+private val Divider = Color(0xFFE5E5EA)
 
 private val LightColors = lightColorScheme(
-    primary = Blue,
+    primary = AnyDoBlue,
     onPrimary = Color.White,
-    primaryContainer = Sky.copy(alpha = 0.45f),
-    onPrimaryContainer = Ink,
-    secondary = BlueSoft,
+    primaryContainer = AnyDoBlueLight,
+    onPrimaryContainer = AnyDoBlueDark,
+    secondary = AnyDoBlueDark,
     onSecondary = Color.White,
-    background = Paper,
+    background = Color.White,
     onBackground = Ink,
     surface = Color.White,
     onSurface = Ink,
-    surfaceVariant = Color(0xFFE2EBF4),
-    onSurfaceVariant = Color(0xFF3D5166),
-    error = Color(0xFFB3261E)
+    surfaceVariant = Color(0xFFF2F2F7),
+    onSurfaceVariant = InkMuted,
+    outline = Color(0xFFC7C7CC),
+    outlineVariant = Divider,
+    error = Color(0xFFFF3B30)
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Sky,
-    onPrimary = Ink,
-    primaryContainer = Blue,
-    onPrimaryContainer = Sky,
-    secondary = BlueSoft,
+    primary = AnyDoBlue,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF003A66),
+    onPrimaryContainer = Color(0xFFB3DAFF),
+    secondary = AnyDoBlue,
     onSecondary = Color.White,
-    background = Color(0xFF0B1520),
-    onBackground = Color(0xFFE7F0F8),
-    surface = Color(0xFF122033),
-    onSurface = Color(0xFFE7F0F8),
-    surfaceVariant = Color(0xFF1C2E44),
-    onSurfaceVariant = Color(0xFFB7C7D8),
-    error = Color(0xFFFFB4AB)
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFF2F2F7),
+    surface = Color(0xFF1C1C1E),
+    onSurface = Color(0xFFF2F2F7),
+    surfaceVariant = Color(0xFF2C2C2E),
+    onSurfaceVariant = Color(0xFF8E8E93),
+    outline = Color(0xFF48484A),
+    outlineVariant = Color(0xFF38383A),
+    error = Color(0xFFFF453A)
 )
 
 @Composable

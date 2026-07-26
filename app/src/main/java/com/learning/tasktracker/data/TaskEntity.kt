@@ -16,6 +16,8 @@ data class TaskEntity(
     val recurrenceInterval: Int = 1,
     /** Bitmask for CUSTOM_DAYS: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64. */
     val recurrenceWeekdayMask: Int = 0,
+    /** Last calendar day for recurrence; null = no end date. */
+    val recurrenceEndEpochDay: Long? = null,
     /** Minutes from midnight (0–1439); null = all-day task. */
     val dueTimeMinutes: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
