@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -136,7 +137,12 @@ internal fun TaskEditorSheet(
             else -> DateUtils.formatShort(day)
         }
     } ?: "Без даты"
-    val timeLabel = dueTimeMinutes?.let { DateUtils.formatTime(it) } ?: "Без времени"
+    val timeLabel = when {
+        dueDateEpochDay == null -> "Нужна дата"
+        dueTimeMinutes != null -> DateUtils.formatTime(dueTimeMinutes!!)
+        else -> "Без времени"
+    }
+    val timeEnabled = dueDateEpochDay != null
     val recurrenceLabel = if (recurrenceType == RecurrenceType.NONE) {
         "Не повторяется"
     } else {
@@ -238,13 +244,37 @@ internal fun TaskEditorSheet(
             EditorOptionRow(
                 label = "Время",
                 value = timeLabel,
-                onClick = {
-                    if (dueDateEpochDay == null) {
-                        dueDateEpochDay = DateUtils.todayEpochDay()
-                    }
-                    showTimePicker = true
-                }
+                enabled = timeEnabled,
+                onClick = { showTimePicker = true }
             )
+            if (timeEnabled) {
+                FlowRow(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(9 to 0, 12 to 0, 15 to 0, 18 to 0).forEach { (hour, minute) ->
+                        val minutes = DateUtils.hourMinuteToMinutes(hour, minute)
+                        FilterChip(
+                            selected = dueTimeMinutes == minutes,
+                            onClick = { dueTimeMinutes = minutes },
+                            label = { Text(DateUtils.formatTime(minutes)) }
+                        )
+                    }
+                    FilterChip(
+                        selected = false,
+                        onClick = { dueTimeMinutes = DateUtils.nowMinutesOfDay() },
+                        label = { Text("Сейчас") }
+                    )
+                    if (dueTimeMinutes != null) {
+                        FilterChip(
+                            selected = false,
+                            onClick = { dueTimeMinutes = null },
+                            label = { Text("Без времени") }
+                        )
+                    }
+                }
+            }
             HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
 
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
@@ -467,15 +497,17 @@ internal fun TaskEditorSheet(
         }
     }
 
-    if (showTimePicker) {
+    if (showTimePicker && timeEnabled) {
         val timePickerInitial = dueTimeMinutes ?: DateUtils.hourMinuteToMinutes(9, 0)
         val (initialHour, initialMinute) = DateUtils.minutesToHourMinute(timePickerInitial)
         val timePickerState = rememberTimePickerState(
             initialHour = initialHour,
-            initialMinute = initialMinute
+            initialMinute = initialMinute,
+            is24Hour = true
         )
-        DatePickerDialog(
+        AlertDialog(
             onDismissRequest = { showTimePicker = false },
+            title = { Text("Время") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -488,11 +520,23 @@ internal fun TaskEditorSheet(
                 ) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Отмена") }
+                Row {
+                    TextButton(
+                        onClick = {
+                            dueTimeMinutes = null
+                            showTimePicker = false
+                        }
+                    ) { Text("Без времени") }
+                    TextButton(onClick = { showTimePicker = false }) { Text("Отмена") }
+                }
+            },
+            text = {
+                TimePicker(
+                    state = timePickerState,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-        ) {
-            TimePicker(state = timePickerState)
-        }
+        )
     }
 
     if (showEndDatePicker) {

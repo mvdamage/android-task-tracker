@@ -64,7 +64,6 @@ import com.learning.tasktracker.ui.components.QuickDropDayRow
 import com.learning.tasktracker.ui.components.TaskDayDragState
 import com.learning.tasktracker.ui.components.TaskDragGhost
 import com.learning.tasktracker.ui.components.TaskListTitle
-import com.learning.tasktracker.ui.components.dayDropZone
 import com.learning.tasktracker.ui.components.draggingRowAlpha
 import com.learning.tasktracker.ui.components.rememberTaskDayDragState
 import com.learning.tasktracker.ui.components.taskDragSource
@@ -157,6 +156,25 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
 
+                if (dragState.isDragging) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Text(
+                            text = "Перетащите на день",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                        )
+                        QuickDropDayRow(
+                            today = state.todayEpochDay,
+                            dragState = dragState
+                        )
+                    }
+                }
+
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
@@ -187,22 +205,6 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                             )
                         }
                     } else {
-                        if (dragState.isDragging) {
-                            item(key = "quick_drop_targets") {
-                                Column {
-                                    Text(
-                                        text = "Перетащите на день",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                                    )
-                                    QuickDropDayRow(
-                                        today = state.todayEpochDay,
-                                        dragState = dragState
-                                    )
-                                }
-                            }
-                        }
                         state.groups.forEachIndexed { groupIndex, group ->
                             item(key = "header_${group.groupKey}") {
                                 DaySectionHeader(
@@ -368,6 +370,7 @@ private fun ChecklistItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .draggingRowAlpha(task, dragState)
+            .taskDragSource(task, dragState, onMoveToDay, onTap = onEdit)
             .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top
     ) {
@@ -381,7 +384,6 @@ private fun ChecklistItemRow(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 10.dp)
-                .taskDragSource(task, dragState, onMoveToDay, onTap = onEdit)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

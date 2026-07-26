@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -33,7 +34,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -147,37 +147,21 @@ fun Modifier.taskDragSource(
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-
-    fun rootPosition(change: PointerInputChange): Offset {
-        val coordinates = layoutCoordinates ?: return change.position
-        return if (coordinates.isAttached) {
-            coordinates.localToRoot(change.position)
-        } else {
-            change.position
-        }
-    }
+    val currentCoordinates by rememberUpdatedState(layoutCoordinates)
 
     this
         .onGloballyPositioned { layoutCoordinates = it }
-        .clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = onTap
-        )
         .pointerInput(task.id) {
             detectDragGesturesAfterLongPress(
-                onDragStart = {
+                onDragStart = { offset ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    dragState.startDrag(task, Offset.Unspecified)
+                    val coordinates = currentCoordinates ?: return@detectDragGesturesAfterLongPress
+                    dragState.startDrag(task, coordinates.localToRoot(offset))
                 },
                 onDrag = { change, _ ->
                     change.consume()
-                    val position = rootPosition(change)
-                    if (dragState.draggedTask == null) {
-                        dragState.startDrag(task, position)
-                    } else {
-                        dragState.updateDragPosition(position)
-                    }
+                    val coordinates = currentCoordinates ?: return@detectDragGesturesAfterLongPress
+                    dragState.updateDragPosition(coordinates.localToRoot(change.position))
                 },
                 onDragEnd = {
                     val targetDay = dragState.hoveredDay
@@ -192,6 +176,11 @@ fun Modifier.taskDragSource(
                 onDragCancel = { dragState.clear() }
             )
         }
+        .clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onTap
+        )
 }
 
 @Composable
@@ -212,9 +201,11 @@ fun TaskDragGhost(
         Surface(
             modifier = Modifier
                 .offset {
+                    val ghostWidth = 200.dp.toPx()
+                    val ghostHeight = 56.dp.toPx()
                     IntOffset(
-                        x = (position.x - origin.x - 120.dp.toPx()).roundToInt().coerceAtLeast(0),
-                        y = (position.y - origin.y - 48.dp.toPx()).roundToInt().coerceAtLeast(0)
+                        x = (position.x - origin.x - ghostWidth / 2f).roundToInt(),
+                        y = (position.y - origin.y - ghostHeight / 2f).roundToInt()
                     )
                 }
                 .widthIn(max = 240.dp)
@@ -307,7 +298,7 @@ private fun DropDayChip(
                 else MaterialTheme.colorScheme.surfaceVariant
             )
             .padding(horizontal = 12.dp, vertical = 8.dp)
-            .dayDropZone(day, dragState, merge = true)
+            .dayDropZone(day, dragState, merge = false)
     ) {
         Text(
             text = label,
