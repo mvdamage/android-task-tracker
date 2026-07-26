@@ -1,9 +1,36 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
+
+val versionPropertiesFile = rootProject.file("version.properties")
+
+fun loadVersionProperties(): Properties = Properties().apply {
+    if (versionPropertiesFile.exists()) {
+        versionPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun readVersionInt(props: Properties, key: String, default: Int): Int =
+    props.getProperty(key)?.toIntOrNull() ?: default
+
+fun versionNameFrom(props: Properties): String {
+    val major = readVersionInt(props, "versionMajor", 1)
+    val minor = readVersionInt(props, "versionMinor", 0)
+    val patch = readVersionInt(props, "versionPatch", 0)
+    return "$major.$minor.$patch"
+}
+
+val versionProperties = loadVersionProperties()
+val appVersionMajor = readVersionInt(versionProperties, "versionMajor", 1)
+val appVersionMinor = readVersionInt(versionProperties, "versionMinor", 0)
+val appVersionPatch = readVersionInt(versionProperties, "versionPatch", 0)
+val appVersionCode = readVersionInt(versionProperties, "versionCode", 1)
+val appVersionName = versionNameFrom(versionProperties)
 
 android {
     namespace = "com.learning.tasktracker"
@@ -13,8 +40,10 @@ android {
         applicationId = "com.learning.tasktracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+        buildConfigField("String", "VERSION_NAME", "\"$appVersionName\"")
+        buildConfigField("int", "VERSION_CODE", "$appVersionCode")
     }
 
     buildTypes {
@@ -38,6 +67,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -67,4 +97,54 @@ dependencies {
     ksp("androidx.room:room-compiler:$room")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+}
+
+fun writeVersionProperties(versionCode: Int) {
+    val props = loadVersionProperties()
+    props.setProperty("versionMajor", appVersionMajor.toString())
+    props.setProperty("versionMinor", appVersionMinor.toString())
+    props.setProperty("versionPatch", appVersionPatch.toString())
+    props.setProperty("versionCode", versionCode.toString())
+    versionPropertiesFile.outputStream().use { output ->
+        props.store(output, "Application version for APK builds")
+    }
+}
+
+tasks.register("bumpVersionCode") {
+    group = "versioning"
+    description = "Increment versionCode in version.properties"
+    doLast {
+        val props = loadVersionProperties()
+        val currentCode = readVersionInt(props, "versionCode", 1)
+        val nextCode = currentCode + 1
+        writeVersionProperties(nextCode)
+        logger.lifecycle("versionCode -> $nextCode (versionName stays $appVersionName)")
+        logger.lifecycle("Run assembleDebug or publishDebugApk to build the new version.")
+    }
+}
+
+tasks.register("publishDebugApk") {
+    group = "publishing"
+    description = "Build debug APK and copy versioned artifact to releases/"
+    dependsOn("assembleDebug")
+
+    doLast {
+        val props = loadVersionProperties()
+        val versionName = versionNameFrom(props)
+        val versionCode = readVersionInt(props, "versionCode", 1)
+        val versionedApkName = "task-tracker-$versionName-$versionCode-debug.apk"
+
+        val debugDir = layout.buildDirectory.dir("outputs/apk/debug").get().asFile
+        val source = debugDir.listFiles()
+            ?.firstOrNull { it.isFile && it.name.endsWith(".apk") }
+            ?: error("APK not found in ${debugDir.absolutePath}")
+
+        val releases = rootProject.file("releases").apply { mkdirs() }
+        val versionedTarget = releases.resolve(versionedApkName)
+        source.copyTo(versionedTarget, overwrite = true)
+        source.copyTo(releases.resolve("task-tracker-debug.apk"), overwrite = true)
+
+        logger.lifecycle("Published ${versionedTarget.name}")
+        logger.lifecycle("Updated releases/task-tracker-debug.apk")
+    }
 }

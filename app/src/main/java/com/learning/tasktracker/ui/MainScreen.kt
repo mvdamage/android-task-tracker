@@ -3,7 +3,9 @@ package com.learning.tasktracker.ui
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.learning.tasktracker.ui.components.AppVersionLabel
 
 private enum class AppTab(
     val label: String,
@@ -47,25 +50,32 @@ fun MainScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar(tonalElevation = 3.dp) {
-                AppTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == tab,
-                        onClick = { selectedTab = tab },
-                        icon = {
-                            val icon = if (selectedTab == tab) tab.filledIcon else tab.outlinedIcon
-                            if (tab == AppTab.SHOPPING && shoppingState.activeCount > 0) {
-                                BadgedBox(
-                                    badge = { Badge { Text("${shoppingState.activeCount}") } }
-                                ) {
+            Column {
+                AppVersionLabel(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 2.dp),
+                )
+                NavigationBar(tonalElevation = 3.dp) {
+                    AppTab.entries.forEach { tab ->
+                        NavigationBarItem(
+                            selected = selectedTab == tab,
+                            onClick = { selectedTab = tab },
+                            icon = {
+                                val icon = if (selectedTab == tab) tab.filledIcon else tab.outlinedIcon
+                                if (tab == AppTab.SHOPPING && shoppingState.activeCount > 0) {
+                                    BadgedBox(
+                                        badge = { Badge { Text("${shoppingState.activeCount}") } }
+                                    ) {
+                                        Icon(icon, contentDescription = tab.label)
+                                    }
+                                } else {
                                     Icon(icon, contentDescription = tab.label)
                                 }
-                            } else {
-                                Icon(icon, contentDescription = tab.label)
-                            }
-                        },
-                        label = { Text(tab.label) }
-                    )
+                            },
+                            label = { Text(tab.label) }
+                        )
+                    }
                 }
             }
         }
