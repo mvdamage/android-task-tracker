@@ -1,7 +1,8 @@
 package com.learning.tasktracker.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,9 +12,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DragHandle
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -110,42 +108,29 @@ fun Modifier.dayDropZone(day: Long, dragState: TaskDayDragState): Modifier =
         dragState.registerDropZone(day, coordinates.boundsInRoot())
     }
 
-@Composable
-fun TaskDragHandle(
+fun Modifier.taskDragSource(
     task: TaskEntity,
     dragState: TaskDayDragState,
     onDrop: (TaskEntity, Long) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val haptic = LocalHapticFeedback.current
-    Icon(
-        imageVector = Icons.Outlined.DragHandle,
-        contentDescription = "Перетащить задачу",
-        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-        modifier = modifier.taskDragHandle(task, dragState, onDrop, haptic)
-    )
-}
-
-private fun Modifier.taskDragHandle(
-    task: TaskEntity,
-    dragState: TaskDayDragState,
-    onDrop: (TaskEntity, Long) -> Unit,
-    haptic: androidx.compose.ui.hapticfeedback.HapticFeedback
+    onTap: () -> Unit
 ): Modifier = composed {
-    var handleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val haptic = LocalHapticFeedback.current
+    var rowCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     this
-        .padding(end = 4.dp)
-        .onGloballyPositioned { handleCoordinates = it }
+        .onGloballyPositioned { rowCoordinates = it }
         .pointerInput(task.id) {
-            detectDragGestures(
+            detectTapGestures(onTap = { onTap() })
+        }
+        .pointerInput(task.id) {
+            detectDragGesturesAfterLongPress(
                 onDragStart = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     dragState.startDrag(task, Offset.Unspecified)
                 },
                 onDrag = { change, _ ->
                     change.consume()
-                    val coords = handleCoordinates ?: return@detectDragGestures
+                    val coords = rowCoordinates ?: return@detectDragGesturesAfterLongPress
                     dragState.updateDragPosition(coords.localToRoot(change.position))
                 },
                 onDragEnd = {

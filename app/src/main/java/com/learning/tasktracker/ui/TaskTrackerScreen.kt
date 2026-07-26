@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,11 +65,11 @@ import com.learning.tasktracker.ui.components.QuickAddBar
 import com.learning.tasktracker.ui.components.QuickDropDayRow
 import com.learning.tasktracker.ui.components.TaskDayDragState
 import com.learning.tasktracker.ui.components.TaskDragGhost
-import com.learning.tasktracker.ui.components.TaskDragHandle
 import com.learning.tasktracker.ui.components.TaskListTitle
 import com.learning.tasktracker.ui.components.dayDropZone
 import com.learning.tasktracker.ui.components.draggingRowAlpha
 import com.learning.tasktracker.ui.components.rememberTaskDayDragState
+import com.learning.tasktracker.ui.components.taskDragSource
 import com.learning.tasktracker.ui.theme.extendedColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -373,14 +372,9 @@ private fun ChecklistItemRow(
             .fillMaxWidth()
             .dayDropZone(day, dragState)
             .draggingRowAlpha(task, dragState)
-            .padding(horizontal = 4.dp, vertical = 12.dp),
+            .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top
     ) {
-        TaskDragHandle(
-            task = task,
-            dragState = dragState,
-            onDrop = onMoveToDay
-        )
         CircularTaskCheckbox(
             checked = task.isDone,
             onCheckedChange = onToggle,
@@ -391,7 +385,7 @@ private fun ChecklistItemRow(
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 10.dp)
-                .clickable(onClick = onEdit)
+                .taskDragSource(task, dragState, onMoveToDay, onTap = onEdit)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -474,7 +468,7 @@ private fun SubtaskRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
+            .padding(top = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         CircularTaskCheckbox(
