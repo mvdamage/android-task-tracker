@@ -49,6 +49,21 @@ class TaskRepository(
         dao.update(task.copy(dueDateEpochDay = alignedDue, updatedAt = System.currentTimeMillis()))
     }
 
+    suspend fun moveToDay(task: TaskEntity, targetEpochDay: Long) {
+        if (task.dueDateEpochDay == targetEpochDay) return
+        val alignedDue = DateUtils.alignToRecurrence(
+            targetEpochDay,
+            task.recurrenceType,
+            task.recurrenceWeekdayMask
+        )
+        dao.update(
+            task.copy(
+                dueDateEpochDay = alignedDue,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     suspend fun toggleDone(task: TaskEntity) {
         val now = System.currentTimeMillis()
         if (!task.isDone && task.isRecurring) {

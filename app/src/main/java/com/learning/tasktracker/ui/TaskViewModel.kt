@@ -193,6 +193,10 @@ class TaskViewModel(
         viewModelScope.launch { repository.deleteSubtask(subtask) }
     }
 
+    fun moveTaskToDay(task: TaskEntity, targetEpochDay: Long) {
+        viewModelScope.launch { repository.moveToDay(task, targetEpochDay) }
+    }
+
     companion object {
         fun filterTitleSuggestions(history: List<String>, query: String, limit: Int = 5): List<String> {
             val trimmed = query.trim()

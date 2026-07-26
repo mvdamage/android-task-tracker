@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,10 +52,15 @@ import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
 import com.learning.tasktracker.ui.components.AnyDoDivider
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
+import com.learning.tasktracker.ui.components.DaySectionHeader
 import com.learning.tasktracker.ui.components.FilterSegmentRow
 import com.learning.tasktracker.ui.components.PriorityDot
 import com.learning.tasktracker.ui.components.QuickAddBar
+import com.learning.tasktracker.ui.components.QuickDropDayRow
+import com.learning.tasktracker.ui.components.TaskDayDragState
 import com.learning.tasktracker.ui.components.TaskListTitle
+import com.learning.tasktracker.ui.components.draggableTaskRow
+import com.learning.tasktracker.ui.components.rememberTaskDayDragState
 import com.learning.tasktracker.ui.theme.extendedColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -67,6 +71,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     var editor by remember { mutableStateOf<EditorState?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    val dragState = rememberTaskDayDragState()
     val extended = MaterialTheme.extendedColors
 
     Scaffold(
@@ -141,7 +146,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     filter.label to { viewModel.setFilter(filter) }
                 },
                 selectedIndex = TaskFilter.entries.indexOf(state.filter),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
             )
 
             if (state.groups.isEmpty()) {
@@ -153,25 +158,36 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 )
             } else {
                 LazyColumn(
+                    modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 8.dp,
                         bottom = 88.dp
                     )
                 ) {
-                    state.groups.forEach { group ->
-                        item(key = "header_${group.dueDateEpochDay}") {
-                            Text(
-                                text = group.title.uppercase(),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = extended.sectionHeader,
-                                modifier = Modifier.padding(
-                                    start = 4.dp,
-                                    end = 4.dp,
-                                    top = 20.dp,
-                                    bottom = 8.dp
+                    if (dragState.isDragging) {
+                        item(key = "quick_drop_targets") {
+                            Column {
+                                Text(
+                                    text = "Перетащите на день",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                                 )
+                                QuickDropDayRow(
+                                    today = state.todayEpochDay,
+                                    dragState = dragState
+                                )
+                            }
+                        }
+                    }
+                    state.groups.forEachIndexed { groupIndex, group ->
+                        item(key = "header_${group.dueDateEpochDay}") {
+                            DaySectionHeader(
+                                title = group.title,
+                                day = group.dueDateEpochDay,
+                                dragState = dragState,
+                                topPadding = if (groupIndex == 0 && !dragState.isDragging) 4.dp else if (groupIndex == 0) 0.dp else 16.dp
                             )
                         }
                         items(group.tasks, key = { it.id }) { task ->
@@ -186,9 +202,11 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                                     today = state.todayEpochDay,
                                     subtasksEnabled = state.subtasksEnabled,
                                     subtasks = subtasks,
+                                    dragState = dragState,
                                     onToggle = { viewModel.toggleDone(task) },
                                     onToggleSubtask = viewModel::toggleSubtask,
-                                    onEdit = { editor = EditorState.Edit(task) }
+                                    onEdit = { editor = EditorState.Edit(task) },
+                                    onMoveToDay = viewModel::moveTaskToDay
                                 )
                             }
                             AnyDoDivider()
@@ -316,9 +334,11 @@ private fun ChecklistItemRow(
     today: Long,
     subtasksEnabled: Boolean,
     subtasks: List<SubtaskEntity>,
+    dragState: TaskDayDragState,
     onToggle: () -> Unit,
     onToggleSubtask: (SubtaskEntity) -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onMoveToDay: (TaskEntity, Long) -> Unit
 ) {
     val extended = MaterialTheme.extendedColors
     val overdue = task.isOverdue(today)
@@ -326,7 +346,12 @@ private fun ChecklistItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onEdit)
+            .draggableTaskRow(
+                task = task,
+                dragState = dragState,
+                onTap = onEdit,
+                onDrop = onMoveToDay
+            )
             .padding(horizontal = 4.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top
     ) {
