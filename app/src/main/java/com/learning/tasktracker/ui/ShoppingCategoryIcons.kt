@@ -3,6 +3,9 @@ package com.learning.tasktracker.ui
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.BakeryDining
+import androidx.compose.material.icons.outlined.ChildCare
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.Egg
 import androidx.compose.material.icons.outlined.Eco
@@ -48,7 +51,10 @@ object ShoppingCategoryPresets {
         ShoppingCategoryIconOption("cleaning", Icons.Outlined.CleaningServices, "Уборка"),
         ShoppingCategoryIconOption("soap", Icons.Outlined.Soap, "Гигиена"),
         ShoppingCategoryIconOption("medication", Icons.Outlined.Medication, "Аптека"),
-        ShoppingCategoryIconOption("pets", Icons.Outlined.Pets, "Питомцы")
+        ShoppingCategoryIconOption("pets", Icons.Outlined.Pets, "Питомцы"),
+        ShoppingCategoryIconOption("child", Icons.Outlined.ChildCare, "Ребёнок"),
+        ShoppingCategoryIconOption("self", Icons.Outlined.Person, "Для себя"),
+        ShoppingCategoryIconOption("other", Icons.Outlined.MoreHoriz, "Другое")
     )
 
     fun colorFromArgb(argb: Long): Color = Color(argb.toInt())

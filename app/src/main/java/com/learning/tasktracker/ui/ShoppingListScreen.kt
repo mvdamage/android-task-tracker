@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,8 +28,6 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -68,8 +65,7 @@ import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.components.HorizontalSuggestionPills
 import com.learning.tasktracker.ui.components.QuickAddBar
 import com.learning.tasktracker.ui.components.ShoppingProgressBar
-
-private val quickExamples = listOf("Молоко", "Хлеб", "Яйца", "Сыр", "Овощи")
+import com.learning.tasktracker.ui.theme.extendedColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +77,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     var selectedCategoryId by remember { mutableLongStateOf(0L) }
     var showInput by remember { mutableStateOf(false) }
     var showCategoriesSheet by remember { mutableStateOf(false) }
+    var editingItem by remember { mutableStateOf<ShoppingItemEntity?>(null) }
     var confirmClearChecked by remember { mutableStateOf(false) }
     var deleteCategoryItemCount by remember { mutableIntStateOf(0) }
     val inputFocusRequester = remember { FocusRequester() }
@@ -98,7 +95,10 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     }
 
     val suggestions = remember(newItemTitle, titleHistory) {
-        TaskViewModel.filterTitleSuggestions(titleHistory, newItemTitle)
+        ShoppingViewModel.shoppingInputSuggestions(titleHistory, newItemTitle)
+    }
+    val quickSuggestions = remember(titleHistory) {
+        ShoppingViewModel.shoppingInputSuggestions(titleHistory, "")
     }
 
     fun addCurrentItem() {
@@ -113,6 +113,14 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
 
     val categoryById = remember(state.categories) {
         state.categories.associateBy { it.id }
+    }
+    val showSectionHeaders = remember(state.groups, state.categories) {
+        when {
+            state.groups.size > 1 -> true
+            state.groups.size == 1 ->
+                state.groups.first().category != null || state.categories.isNotEmpty()
+            else -> false
+        }
     }
 
     Scaffold(
@@ -136,14 +144,15 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    if (state.checkedCount > 0) {
-                        IconButton(onClick = { confirmClearChecked = true }) {
-                            Icon(
-                                Icons.Outlined.DeleteSweep,
-                                contentDescription = "Очистить купленное",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    IconButton(
+                        onClick = { confirmClearChecked = true },
+                        enabled = state.checkedCount > 0
+                    ) {
+                        Icon(
+                            Icons.Outlined.DeleteSweep,
+                            contentDescription = "Очистить купленное",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -202,6 +211,12 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     }
                     if (suggestions.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = if (newItemTitle.isBlank()) "Подсказки" else "Похожие",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
                         HorizontalSuggestionPills(
                             suggestions = suggestions,
                             onSelect = { newItemTitle = it }
@@ -209,7 +224,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     }
                     if (state.categories.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        CategoryPickerRow(
+                        ShoppingCategoryPickerRow(
                             categories = state.categories,
                             selectedCategoryId = selectedCategoryId,
                             onSelect = { selectedCategoryId = it }
@@ -222,6 +237,13 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     onClick = { showInput = true },
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 )
+                if (quickSuggestions.isNotEmpty()) {
+                    HorizontalSuggestionPills(
+                        suggestions = quickSuggestions,
+                        onSelect = { viewModel.addItem(it) },
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                    )
+                }
             }
 
             if (state.items.isEmpty()) {
@@ -255,19 +277,31 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                         bottom = 8.dp
                     )
                 ) {
-                    items(state.items, key = { it.id }) { item ->
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn() + slideInVertically { it / 4 },
-                            exit = fadeOut()
-                        ) {
-                            ShoppingItemRow(
-                                item = item,
-                                category = item.categoryId?.let { categoryById[it] },
-                                onToggle = { viewModel.toggleChecked(item) }
-                            )
+                    state.groups.forEachIndexed { groupIndex, group ->
+                        if (showSectionHeaders) {
+                            item(key = "header_${group.category?.id ?: "uncategorized"}") {
+                                ShoppingCategorySectionHeader(
+                                    category = group.category,
+                                    topPadding = if (groupIndex == 0) 0.dp else 12.dp
+                                )
+                            }
                         }
-                        AnyDoDivider()
+                        items(group.items, key = { it.id }) { item ->
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn() + slideInVertically { it / 4 },
+                                exit = fadeOut()
+                            ) {
+                                ShoppingItemRow(
+                                    item = item,
+                                    category = item.categoryId?.let { categoryById[it] },
+                                    showCategoryBadge = !showSectionHeaders,
+                                    onToggle = { viewModel.toggleChecked(item) },
+                                    onEdit = { editingItem = item }
+                                )
+                            }
+                            AnyDoDivider()
+                        }
                     }
                 }
             }
@@ -284,6 +318,23 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
             onConfirmDeleteCategory = viewModel::confirmDeleteCategory,
             onDismissDeleteCategory = viewModel::dismissDeleteCategory,
             onDismiss = { showCategoriesSheet = false }
+        )
+    }
+
+    editingItem?.let { item ->
+        ShoppingItemEditorSheet(
+            item = item,
+            categories = state.categories,
+            titleHistory = titleHistory,
+            onDismiss = { editingItem = null },
+            onSave = { title, categoryId ->
+                viewModel.updateItem(item, title, categoryId)
+                editingItem = null
+            },
+            onDelete = {
+                viewModel.delete(item)
+                editingItem = null
+            }
         )
     }
 
@@ -324,43 +375,33 @@ private fun pluralCheckedItems(count: Int): String {
 }
 
 @Composable
-private fun CategoryPickerRow(
-    categories: List<ShoppingCategoryEntity>,
-    selectedCategoryId: Long,
-    onSelect: (Long) -> Unit
+private fun ShoppingCategorySectionHeader(
+    category: ShoppingCategoryEntity?,
+    modifier: Modifier = Modifier,
+    topPadding: androidx.compose.ui.unit.Dp = 0.dp
 ) {
-    LazyRow(
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        item {
-            FilterChip(
-                selected = selectedCategoryId == 0L,
-                onClick = { onSelect(0L) },
-                label = { Text("Без категории") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.primary
-                )
+        if (category != null) {
+            ShoppingCategoryBadge(category = category)
+            Text(
+                text = category.name.uppercase(),
+                style = MaterialTheme.typography.titleSmall,
+                color = ShoppingCategoryPresets.colorFromArgb(category.colorArgb),
+                fontWeight = FontWeight.SemiBold
             )
-        }
-        items(categories, key = { it.id }) { category ->
-            val color = ShoppingCategoryPresets.colorFromArgb(category.colorArgb)
-            FilterChip(
-                selected = selectedCategoryId == category.id,
-                onClick = { onSelect(category.id) },
-                label = { Text(category.name) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = ShoppingCategoryPresets.iconForKey(category.iconKey),
-                        contentDescription = null,
-                        tint = color,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = color.copy(alpha = 0.18f),
-                    selectedLabelColor = color
-                )
+        } else {
+            Text(
+                text = "БЕЗ КАТЕГОРИИ",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.extendedColors.sectionHeader,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 4.dp)
             )
         }
     }
@@ -370,7 +411,9 @@ private fun CategoryPickerRow(
 private fun ShoppingItemRow(
     item: ShoppingItemEntity,
     category: ShoppingCategoryEntity?,
-    onToggle: () -> Unit
+    showCategoryBadge: Boolean = true,
+    onToggle: () -> Unit,
+    onEdit: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -382,7 +425,7 @@ private fun ShoppingItemRow(
             checked = item.isChecked,
             onCheckedChange = onToggle
         )
-        if (category != null) {
+        if (showCategoryBadge && category != null) {
             ShoppingCategoryBadge(
                 category = category,
                 modifier = Modifier.padding(start = 10.dp)
@@ -399,7 +442,8 @@ private fun ShoppingItemRow(
             textDecoration = if (item.isChecked) TextDecoration.LineThrough else null,
             modifier = Modifier
                 .weight(1f)
-                .padding(start = if (category != null) 10.dp else 14.dp),
+                .padding(start = if (showCategoryBadge && category != null) 10.dp else 14.dp)
+                .clickable(onClick = onEdit),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -436,7 +480,7 @@ private fun ShoppingEmptyState(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            quickExamples.take(3).forEach { example ->
+            ShoppingViewModel.defaultSuggestions.take(3).forEach { example ->
                 Text(
                     text = example,
                     style = MaterialTheme.typography.labelLarge,

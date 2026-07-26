@@ -28,6 +28,18 @@ class ShoppingRepository(private val dao: ShoppingDao) {
         )
     }
 
+    suspend fun update(item: ShoppingItemEntity, title: String, categoryId: Long?) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        dao.update(
+            item.copy(
+                title = trimmed,
+                categoryId = categoryId,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     suspend fun delete(item: ShoppingItemEntity) {
         dao.delete(item)
     }

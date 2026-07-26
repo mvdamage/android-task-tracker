@@ -17,8 +17,14 @@ import kotlinx.coroutines.launch
 data class ShoppingUiState(
     val items: List<ShoppingItemEntity> = emptyList(),
     val categories: List<ShoppingCategoryEntity> = emptyList(),
+    val groups: List<ShoppingCategoryGroup> = emptyList(),
     val activeCount: Int = 0,
     val checkedCount: Int = 0
+)
+
+data class ShoppingCategoryGroup(
+    val category: ShoppingCategoryEntity?,
+    val items: List<ShoppingItemEntity>
 )
 
 class ShoppingViewModel(
@@ -29,6 +35,7 @@ class ShoppingViewModel(
             ShoppingUiState(
                 items = items,
                 categories = categories,
+                groups = buildCategoryGroups(items, categories),
                 activeCount = items.count { !it.isChecked },
                 checkedCount = items.count { it.isChecked }
             )
@@ -65,6 +72,11 @@ class ShoppingViewModel(
         viewModelScope.launch { repository.toggleChecked(item) }
     }
 
+    fun updateItem(item: ShoppingItemEntity, title: String, categoryId: Long?) {
+        if (title.isBlank()) return
+        viewModelScope.launch { repository.update(item, title, categoryId) }
+    }
+
     fun delete(item: ShoppingItemEntity) {
         viewModelScope.launch { repository.delete(item) }
     }
@@ -99,10 +111,62 @@ class ShoppingViewModel(
     suspend fun itemsInCategoryCount(categoryId: Long): Int =
         repository.countItemsInCategory(categoryId)
 
+    companion object {
+        val defaultSuggestions = listOf(
+            "Молоко", "Хлеб", "Яйца", "Сыр", "Овощи", "Фрукты"
+        )
+
+        fun shoppingInputSuggestions(
+            history: List<String>,
+            query: String,
+            defaults: List<String> = defaultSuggestions,
+            limit: Int = 6
+        ): List<String> {
+            val trimmed = query.trim()
+            if (trimmed.isEmpty()) {
+                val recent = history.take(limit)
+                if (recent.size >= limit) return recent
+                val seen = recent.map { it.lowercase() }.toMutableSet()
+                val extras = defaults.filter { it.lowercase() !in seen }
+                return (recent + extras).take(limit)
+            }
+            return TaskViewModel.filterTitleSuggestions(history, trimmed, limit)
+        }
+    }
+
     class Factory(private val repository: ShoppingRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return ShoppingViewModel(repository) as T
         }
     }
+}
+
+private fun sortShoppingItems(items: List<ShoppingItemEntity>): List<ShoppingItemEntity> =
+    items.sortedWith(
+        compareBy<ShoppingItemEntity> { it.isChecked }
+            .thenByDescending { it.updatedAt }
+    )
+
+internal fun buildCategoryGroups(
+    items: List<ShoppingItemEntity>,
+    categories: List<ShoppingCategoryEntity>
+): List<ShoppingCategoryGroup> {
+    if (items.isEmpty()) return emptyList()
+
+    val knownCategoryIds = categories.map { it.id }.toSet()
+    val byCategoryId = items.groupBy { item ->
+        item.categoryId?.takeIf { it in knownCategoryIds }
+    }
+    val groups = mutableListOf<ShoppingCategoryGroup>()
+
+    categories.forEach { category ->
+        byCategoryId[category.id]?.let { categoryItems ->
+            groups += ShoppingCategoryGroup(category, sortShoppingItems(categoryItems))
+        }
+    }
+    byCategoryId[null]?.let { uncategorized ->
+        groups += ShoppingCategoryGroup(null, sortShoppingItems(uncategorized))
+    }
+    return groups
 }
