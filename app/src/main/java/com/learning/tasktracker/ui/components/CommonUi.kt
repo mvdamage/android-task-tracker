@@ -310,7 +310,7 @@ fun PriorityDot(
     priority: Priority,
     modifier: Modifier = Modifier
 ) {
-    if (priority == Priority.HIGH) {
+    if (priority != Priority.MEDIUM) {
         Box(
             modifier = modifier
                 .size(6.dp)

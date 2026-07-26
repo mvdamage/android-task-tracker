@@ -14,6 +14,7 @@ interface TaskDao {
         """
         SELECT * FROM tasks
         ORDER BY
+            CASE WHEN dueDateEpochDay IS NULL THEN 1 ELSE 0 END,
             dueDateEpochDay ASC,
             CASE WHEN dueTimeMinutes IS NULL THEN 1 ELSE 0 END ASC,
             dueTimeMinutes ASC,
@@ -41,6 +42,12 @@ interface TaskDao {
     @Query("DELETE FROM tasks WHERE isDone = 1 AND recurrenceType = 'NONE'")
     suspend fun deleteCompletedNonRecurring()
 
-    @Query("SELECT * FROM tasks WHERE recurrenceType != 'NONE' AND isDone = 0 AND dueDateEpochDay < :today")
+    @Query(
+        """
+        SELECT * FROM tasks
+        WHERE recurrenceType != 'NONE' AND isDone = 0
+            AND dueDateEpochDay IS NOT NULL AND dueDateEpochDay < :today
+        """
+    )
     suspend fun getOverdueRecurring(today: Long): List<TaskEntity>
 }

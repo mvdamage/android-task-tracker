@@ -20,6 +20,18 @@ object DateUtils {
 
     private val weekdayShortLabels = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
+    /** Drop-target / group key for tasks without a due date. */
+    const val UNDATED_GROUP_KEY = Long.MIN_VALUE
+
+    fun groupSortKey(epochDay: Long?): Long = epochDay ?: Long.MAX_VALUE
+
+    fun groupSectionTitle(epochDay: Long?, today: Long = todayEpochDay()): String =
+        if (epochDay == null) "Без даты" else sectionTitle(epochDay, today)
+
+    fun toGroupKey(epochDay: Long?): Long = epochDay ?: UNDATED_GROUP_KEY
+
+    fun fromGroupKey(key: Long): Long? = if (key == UNDATED_GROUP_KEY) null else key
+
     fun todayEpochDay(): Long = LocalDate.now(zone).toEpochDay()
 
     fun fromEpochDay(epochDay: Long): LocalDate = LocalDate.ofEpochDay(epochDay)
@@ -44,12 +56,12 @@ object DateUtils {
     }
 
     fun isOverdue(
-        dueDateEpochDay: Long,
+        dueDateEpochDay: Long?,
         dueTimeMinutes: Int?,
         isDone: Boolean,
         today: Long = todayEpochDay()
     ): Boolean {
-        if (isDone) return false
+        if (isDone || dueDateEpochDay == null) return false
         if (dueDateEpochDay < today) return true
         if (dueDateEpochDay > today) return false
         val time = dueTimeMinutes ?: return false
@@ -64,7 +76,8 @@ object DateUtils {
     fun formatTime(minutes: Int): String =
         LocalTime.of(minutes / 60, minutes % 60).format(timeFormatter)
 
-    fun formatDueLabel(epochDay: Long, timeMinutes: Int?): String {
+    fun formatDueLabel(epochDay: Long?, timeMinutes: Int?): String {
+        if (epochDay == null) return "Без даты"
         val date = formatShort(epochDay)
         return if (timeMinutes != null) "$date, ${formatTime(timeMinutes)}" else date
     }
@@ -138,6 +151,15 @@ object DateUtils {
             }
         } ?: return null
         return if (endEpochDay != null && rawNext > endEpochDay) null else rawNext
+    }
+
+    fun alignDueDate(
+        dueDate: Long?,
+        type: RecurrenceType,
+        weekdayMask: Int
+    ): Long? {
+        if (dueDate == null) return null
+        return alignToRecurrence(dueDate, type, weekdayMask)
     }
 
     /** Align due date to the nearest matching weekday on or after [dueDate]. */

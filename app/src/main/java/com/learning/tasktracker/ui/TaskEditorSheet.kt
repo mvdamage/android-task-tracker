@@ -34,7 +34,6 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,7 +65,7 @@ internal data class TaskEditorResult(
     val title: String,
     val notes: String,
     val priority: Priority,
-    val dueDateEpochDay: Long,
+    val dueDateEpochDay: Long?,
     val recurrenceType: RecurrenceType,
     val recurrenceWeekdayMask: Int,
     val recurrenceEndEpochDay: Long?,
@@ -93,7 +92,7 @@ internal fun TaskEditorSheet(
     var notes by remember(state) { mutableStateOf(existing?.notes.orEmpty()) }
     var priority by remember(state) { mutableStateOf(existing?.priority ?: Priority.MEDIUM) }
     var dueDateEpochDay by remember(state) {
-        mutableLongStateOf(existing?.dueDateEpochDay ?: DateUtils.todayEpochDay())
+        mutableStateOf(existing?.dueDateEpochDay)
     }
     var recurrenceType by remember(state) {
         mutableStateOf(existing?.recurrenceType ?: RecurrenceType.NONE)
@@ -117,16 +116,19 @@ internal fun TaskEditorSheet(
         TaskViewModel.filterTitleSuggestions(titleHistory, title)
     }
     val customDaysValid = recurrenceType != RecurrenceType.CUSTOM_DAYS || recurrenceWeekdayMask != 0
-    val endDateValid = recurrenceEndEpochDay == null || recurrenceEndEpochDay!! >= dueDateEpochDay
+    val recurrenceValid = recurrenceType == RecurrenceType.NONE || dueDateEpochDay != null
+    val endDateValid = dueDateEpochDay == null ||
+        recurrenceEndEpochDay == null ||
+        recurrenceEndEpochDay!! >= dueDateEpochDay!!
 
-    val dateLabel = run {
+    val dateLabel = dueDateEpochDay?.let { day ->
         val today = DateUtils.todayEpochDay()
-        when (dueDateEpochDay) {
+        when (day) {
             today -> "Сегодня"
             today + 1 -> "Завтра"
-            else -> DateUtils.formatShort(dueDateEpochDay)
+            else -> DateUtils.formatShort(day)
         }
-    }
+    } ?: "Без даты"
     val timeLabel = dueTimeMinutes?.let { DateUtils.formatTime(it) } ?: "Без времени"
     val recurrenceLabel = if (recurrenceType == RecurrenceType.NONE) {
         "Не повторяется"
@@ -155,7 +157,7 @@ internal fun TaskEditorSheet(
                 TextButton(onClick = onDismiss) { Text("Отмена") }
                 TextButton(
                     onClick = {
-                        if (title.isNotBlank() && customDaysValid && endDateValid) {
+                        if (title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid) {
                             onSave(
                                 TaskEditorResult(
                                     title = title,
@@ -173,16 +175,16 @@ internal fun TaskEditorSheet(
                                     } else {
                                         recurrenceEndEpochDay
                                     },
-                                    dueTimeMinutes = dueTimeMinutes
+                                    dueTimeMinutes = if (dueDateEpochDay == null) null else dueTimeMinutes
                                 )
                             )
                         }
                     },
-                    enabled = title.isNotBlank() && customDaysValid && endDateValid
+                    enabled = title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid
                 ) {
                     Text(
                         "Готово",
-                        color = if (title.isNotBlank() && customDaysValid && endDateValid) {
+                        color = if (title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -227,8 +229,32 @@ internal fun TaskEditorSheet(
             EditorOptionRow(
                 label = "Время",
                 value = timeLabel,
-                onClick = { showTimePicker = true }
+                onClick = {
+                    if (dueDateEpochDay == null) {
+                        dueDateEpochDay = DateUtils.todayEpochDay()
+                    }
+                    showTimePicker = true
+                }
             )
+            HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
+
+            Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                Text(
+                    text = "Приоритет",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Priority.entries.forEach { value ->
+                        PriorityChip(
+                            priority = value,
+                            selected = priority == value,
+                            onClick = { priority = value }
+                        )
+                    }
+                }
+            }
             HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
 
             EditorOptionRow(
@@ -250,9 +276,13 @@ internal fun TaskEditorSheet(
                                 recurrenceType = value
                                 if (value == RecurrenceType.NONE) {
                                     recurrenceEndEpochDay = null
+                                } else if (dueDateEpochDay == null) {
+                                    dueDateEpochDay = DateUtils.todayEpochDay()
                                 }
                                 if (value == RecurrenceType.CUSTOM_DAYS && recurrenceWeekdayMask == 0) {
-                                    recurrenceWeekdayMask = DateUtils.weekdayBit(dueDateEpochDay)
+                                    recurrenceWeekdayMask = DateUtils.weekdayBit(
+                                        dueDateEpochDay ?: DateUtils.todayEpochDay()
+                                    )
                                 }
                             },
                             label = { Text(value.label) }
@@ -276,17 +306,6 @@ internal fun TaskEditorSheet(
                                 label = { Text(DateUtils.weekdayChipLabel(day)) }
                             )
                         }
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                EditorSectionTitle("Приоритет")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Priority.entries.forEach { value ->
-                        PriorityChip(
-                            priority = value,
-                            selected = priority == value,
-                            onClick = { priority = value }
-                        )
                     }
                 }
             }
@@ -398,7 +417,8 @@ internal fun TaskEditorSheet(
     }
 
     if (showDatePicker) {
-        val initialMillis = DateUtils.fromEpochDay(dueDateEpochDay)
+        val initialDay = dueDateEpochDay ?: DateUtils.todayEpochDay()
+        val initialMillis = DateUtils.fromEpochDay(initialDay)
             .atStartOfDay(ZoneOffset.UTC)
             .toInstant()
             .toEpochMilli()
@@ -419,7 +439,19 @@ internal fun TaskEditorSheet(
                 ) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Отмена") }
+                Row {
+                    TextButton(
+                        onClick = {
+                            dueDateEpochDay = null
+                            dueTimeMinutes = null
+                            recurrenceType = RecurrenceType.NONE
+                            recurrenceWeekdayMask = 0
+                            recurrenceEndEpochDay = null
+                            showDatePicker = false
+                        }
+                    ) { Text("Без даты") }
+                    TextButton(onClick = { showDatePicker = false }) { Text("Отмена") }
+                }
             }
         ) {
             DatePicker(state = pickerState)
@@ -455,7 +487,7 @@ internal fun TaskEditorSheet(
     }
 
     if (showEndDatePicker) {
-        val initialEnd = recurrenceEndEpochDay ?: (dueDateEpochDay + 30)
+        val initialEnd = recurrenceEndEpochDay ?: ((dueDateEpochDay ?: DateUtils.todayEpochDay()) + 30)
         val initialMillis = DateUtils.fromEpochDay(initialEnd)
             .atStartOfDay(ZoneOffset.UTC)
             .toInstant()

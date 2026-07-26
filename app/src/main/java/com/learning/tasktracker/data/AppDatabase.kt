@@ -23,7 +23,7 @@ class Converters {
     fun toRecurrenceType(value: String): RecurrenceType = RecurrenceType.valueOf(value)
 }
 
-@Database(entities = [TaskEntity::class, ShoppingItemEntity::class, SubtaskEntity::class], version = 7, exportSchema = false)
+@Database(entities = [TaskEntity::class, ShoppingItemEntity::class, SubtaskEntity::class], version = 8, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
@@ -101,6 +101,46 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS tasks_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        notes TEXT NOT NULL,
+                        priority TEXT NOT NULL,
+                        isDone INTEGER NOT NULL,
+                        dueDateEpochDay INTEGER,
+                        recurrenceType TEXT NOT NULL,
+                        recurrenceInterval INTEGER NOT NULL,
+                        recurrenceWeekdayMask INTEGER NOT NULL,
+                        recurrenceEndEpochDay INTEGER,
+                        dueTimeMinutes INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO tasks_new (
+                        id, title, notes, priority, isDone, dueDateEpochDay,
+                        recurrenceType, recurrenceInterval, recurrenceWeekdayMask,
+                        recurrenceEndEpochDay, dueTimeMinutes, createdAt, updatedAt
+                    )
+                    SELECT
+                        id, title, notes, priority, isDone, dueDateEpochDay,
+                        recurrenceType, recurrenceInterval, recurrenceWeekdayMask,
+                        recurrenceEndEpochDay, dueTimeMinutes, createdAt, updatedAt
+                    FROM tasks
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE tasks")
+                db.execSQL("ALTER TABLE tasks_new RENAME TO tasks")
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -111,7 +151,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "task_tracker.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .build()
                     .also { instance = it }
             }

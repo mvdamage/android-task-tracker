@@ -1,15 +1,18 @@
 package com.learning.tasktracker.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -21,18 +24,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.composed
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.ui.theme.extendedColors
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 @Stable
 class TaskDayDragState {
@@ -40,57 +51,141 @@ class TaskDayDragState {
         private set
     var hoveredDay by mutableStateOf<Long?>(null)
         private set
-    val dropBounds = mutableStateMapOf<Long, Rect>()
+    var dragPosition by mutableStateOf(Offset.Unspecified)
+        private set
+    private val dropBounds = mutableStateMapOf<Long, Rect>()
 
     val isDragging: Boolean get() = draggedTask != null
 
-    fun startDrag(task: TaskEntity) {
+    fun startDrag(task: TaskEntity, position: Offset) {
         draggedTask = task
+        dragPosition = position
         hoveredDay = null
     }
 
-    fun updateHover(rootY: Float) {
-        hoveredDay = dropBounds.entries.firstOrNull { (_, rect) ->
-            rootY in rect.top..rect.bottom
-        }?.key
+    fun updateDragPosition(position: Offset) {
+        dragPosition = position
+        hoveredDay = dropBounds.entries.firstOrNull { (_, rect) -> rect.contains(position) }?.key
     }
 
-    fun registerBounds(day: Long, rect: Rect) {
-        dropBounds[day] = rect
+    fun registerDropZone(day: Long, rect: Rect) {
+        dropBounds[day] = dropBounds[day]?.let { existing ->
+            Rect(
+                left = min(existing.left, rect.left),
+                top = min(existing.top, rect.top),
+                right = max(existing.right, rect.right),
+                bottom = max(existing.bottom, rect.bottom)
+            )
+        } ?: rect
+    }
+
+    fun clearDropZones() {
+        dropBounds.clear()
     }
 
     fun clear() {
         draggedTask = null
         hoveredDay = null
+        dragPosition = Offset.Unspecified
     }
 }
+
+private fun Rect.contains(point: Offset): Boolean =
+    point.x in left..right && point.y in top..bottom
 
 @Composable
 fun rememberTaskDayDragState(): TaskDayDragState = remember { TaskDayDragState() }
 
+fun Modifier.dayDropZone(day: Long, dragState: TaskDayDragState): Modifier =
+    onGloballyPositioned { coordinates ->
+        dragState.registerDropZone(day, coordinates.boundsInRoot())
+    }
+
 @Composable
-fun QuickDropDayRow(
-    today: Long,
+fun TaskDragHandle(
+    task: TaskEntity,
+    dragState: TaskDayDragState,
+    onDrop: (TaskEntity, Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    Icon(
+        imageVector = Icons.Outlined.DragHandle,
+        contentDescription = "Перетащить задачу",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+        modifier = modifier.taskDragHandle(task, dragState, onDrop, haptic)
+    )
+}
+
+private fun Modifier.taskDragHandle(
+    task: TaskEntity,
+    dragState: TaskDayDragState,
+    onDrop: (TaskEntity, Long) -> Unit,
+    haptic: androidx.compose.ui.hapticfeedback.HapticFeedback
+): Modifier = composed {
+    var handleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    this
+        .padding(end = 4.dp)
+        .onGloballyPositioned { handleCoordinates = it }
+        .pointerInput(task.id) {
+            detectDragGestures(
+                onDragStart = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    dragState.startDrag(task, Offset.Unspecified)
+                },
+                onDrag = { change, _ ->
+                    change.consume()
+                    val coords = handleCoordinates ?: return@detectDragGestures
+                    dragState.updateDragPosition(coords.localToRoot(change.position))
+                },
+                onDragEnd = {
+                    val targetDay = dragState.hoveredDay
+                    val dragged = dragState.draggedTask
+                    if (dragged != null && targetDay != null &&
+                        targetDay != DateUtils.toGroupKey(dragged.dueDateEpochDay)
+                    ) {
+                        onDrop(dragged, targetDay)
+                    }
+                    dragState.clear()
+                },
+                onDragCancel = { dragState.clear() }
+            )
+        }
+}
+
+@Composable
+fun TaskDragGhost(
+    task: TaskEntity,
     dragState: TaskDayDragState,
     modifier: Modifier = Modifier
 ) {
-    val quickDays = listOf(
-        today to "Сегодня",
-        today + 1 to "Завтра",
-        today + 2 to "Послезавтра",
-        today + 7 to "+7 дней"
-    )
-    Row(
+    val position = dragState.dragPosition
+    if (!dragState.isDragging || position == Offset.Unspecified) return
+
+    Box(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .zIndex(100f)
+            .offset {
+                IntOffset(
+                    x = (position.x - 120.dp.toPx()).roundToInt().coerceAtLeast(0),
+                    y = (position.y - 28.dp.toPx()).roundToInt().coerceAtLeast(0)
+                )
+            }
     ) {
-        quickDays.forEach { (day, label) ->
-            DropDayChip(
-                label = label,
-                day = day,
-                dragState = dragState
+        Surface(
+            modifier = Modifier
+                .widthIn(max = 260.dp)
+                .shadow(8.dp, RoundedCornerShape(10.dp)),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Text(
+                text = task.title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
             )
         }
     }
@@ -123,9 +218,33 @@ fun DaySectionHeader(
                     MaterialTheme.colorScheme.background
                 }
             )
-            .dropTarget(day, dragState)
+            .dayDropZone(day, dragState)
             .padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = 8.dp)
     )
+}
+
+@Composable
+fun QuickDropDayRow(
+    today: Long,
+    dragState: TaskDayDragState,
+    modifier: Modifier = Modifier
+) {
+    androidx.compose.foundation.layout.Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(
+            today to "Сегодня",
+            today + 1 to "Завтра",
+            today + 2 to "Послезавтра",
+            today + 7 to "+7 дней",
+            DateUtils.UNDATED_GROUP_KEY to "Без даты"
+        ).forEach { (day, label) ->
+            DropDayChip(label = label, day = day, dragState = dragState)
+        }
+    }
 }
 
 @Composable
@@ -139,68 +258,20 @@ private fun DropDayChip(
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(
-                if (hovered) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                }
+                if (hovered) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.surfaceVariant
             )
-            .dropTarget(day, dragState)
+            .dayDropZone(day, dragState)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (hovered) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (hovered) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
+            color = if (hovered) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
-private fun Modifier.dropTarget(day: Long, dragState: TaskDayDragState): Modifier =
-    onGloballyPositioned { coordinates ->
-        dragState.registerBounds(day, coordinates.boundsInRoot())
-    }
-
-fun Modifier.draggableTaskRow(
-    task: TaskEntity,
-    dragState: TaskDayDragState,
-    onTap: () -> Unit,
-    onDrop: (TaskEntity, Long) -> Unit
-): Modifier = composed {
-    var rowCoordinates by remember(task.id) { mutableStateOf<LayoutCoordinates?>(null) }
-    var dragOffset by remember(task.id) { mutableStateOf(Offset.Zero) }
-    val fingerOffsetPx = with(LocalDensity.current) { 24.dp.toPx() }
-
-    this
-        .alpha(if (dragState.draggedTask?.id == task.id) 0.35f else 1f)
-        .onGloballyPositioned { rowCoordinates = it }
-        .pointerInput(task.id) {
-            detectTapGestures(onTap = { onTap() })
-            detectDragGesturesAfterLongPress(
-                onDragStart = {
-                    dragOffset = Offset.Zero
-                    dragState.startDrag(task)
-                },
-                onDrag = { _, dragAmount ->
-                    dragOffset += dragAmount
-                    val coords = rowCoordinates ?: return@detectDragGesturesAfterLongPress
-                    val rootY = coords.localToRoot(Offset.Zero).y + dragOffset.y + fingerOffsetPx
-                    dragState.updateHover(rootY)
-                },
-                onDragEnd = {
-                    val targetDay = dragState.hoveredDay
-                    val dragged = dragState.draggedTask
-                    if (dragged != null && targetDay != null && targetDay != dragged.dueDateEpochDay) {
-                        onDrop(dragged, targetDay)
-                    }
-                    dragState.clear()
-                },
-                onDragCancel = { dragState.clear() }
-            )
-        }
-}
+fun Modifier.draggingRowAlpha(task: TaskEntity, dragState: TaskDayDragState): Modifier =
+    alpha(if (dragState.draggedTask?.id == task.id) 0.25f else 1f)

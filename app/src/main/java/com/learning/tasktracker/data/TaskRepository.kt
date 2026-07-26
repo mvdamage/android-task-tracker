@@ -15,13 +15,13 @@ class TaskRepository(
         title: String,
         notes: String,
         priority: Priority,
-        dueDateEpochDay: Long = DateUtils.todayEpochDay(),
+        dueDateEpochDay: Long? = null,
         recurrenceType: RecurrenceType = RecurrenceType.NONE,
         recurrenceWeekdayMask: Int = 0,
         recurrenceEndEpochDay: Long? = null,
         dueTimeMinutes: Int? = null
     ) {
-        val alignedDue = DateUtils.alignToRecurrence(
+        val alignedDue = DateUtils.alignDueDate(
             dueDateEpochDay,
             recurrenceType,
             recurrenceWeekdayMask
@@ -35,22 +35,41 @@ class TaskRepository(
                 recurrenceType = recurrenceType,
                 recurrenceWeekdayMask = recurrenceWeekdayMask,
                 recurrenceEndEpochDay = recurrenceEndEpochDay,
-                dueTimeMinutes = dueTimeMinutes
+                dueTimeMinutes = if (alignedDue == null) null else dueTimeMinutes
             )
         )
     }
 
     suspend fun update(task: TaskEntity) {
-        val alignedDue = DateUtils.alignToRecurrence(
+        val alignedDue = DateUtils.alignDueDate(
             task.dueDateEpochDay,
             task.recurrenceType,
             task.recurrenceWeekdayMask
         )
-        dao.update(task.copy(dueDateEpochDay = alignedDue, updatedAt = System.currentTimeMillis()))
+        dao.update(
+            task.copy(
+                dueDateEpochDay = alignedDue,
+                dueTimeMinutes = if (alignedDue == null) null else task.dueTimeMinutes,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
     }
 
-    suspend fun moveToDay(task: TaskEntity, targetEpochDay: Long) {
+    suspend fun moveToDay(task: TaskEntity, targetEpochDay: Long?) {
         if (task.dueDateEpochDay == targetEpochDay) return
+        if (targetEpochDay == null) {
+            dao.update(
+                task.copy(
+                    dueDateEpochDay = null,
+                    dueTimeMinutes = null,
+                    recurrenceType = RecurrenceType.NONE,
+                    recurrenceWeekdayMask = 0,
+                    recurrenceEndEpochDay = null,
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+            return
+        }
         val alignedDue = DateUtils.alignToRecurrence(
             targetEpochDay,
             task.recurrenceType,
@@ -66,9 +85,10 @@ class TaskRepository(
 
     suspend fun toggleDone(task: TaskEntity) {
         val now = System.currentTimeMillis()
-        if (!task.isDone && task.isRecurring) {
+        val due = task.dueDateEpochDay
+        if (!task.isDone && task.isRecurring && due != null) {
             val next = DateUtils.nextDueDate(
-                task.dueDateEpochDay,
+                due,
                 task.recurrenceType,
                 task.recurrenceInterval,
                 task.recurrenceWeekdayMask,
@@ -137,15 +157,16 @@ class TaskRepository(
                     )
                     return@forEach
                 }
+                val due = task.dueDateEpochDay ?: return@forEach
                 val caughtUp = DateUtils.catchUpDueDate(
-                    dueDate = task.dueDateEpochDay,
+                    dueDate = due,
                     today = today,
                     type = task.recurrenceType,
                     interval = task.recurrenceInterval,
                     weekdayMask = task.recurrenceWeekdayMask,
                     endEpochDay = end
                 )
-                if (caughtUp != task.dueDateEpochDay) {
+                if (caughtUp != due) {
                     dao.update(
                         task.copy(
                             dueDateEpochDay = caughtUp,

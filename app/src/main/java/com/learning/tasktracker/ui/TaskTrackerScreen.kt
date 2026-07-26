@@ -5,7 +5,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.learning.tasktracker.data.DateUtils
+import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.SubtaskEntity
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
@@ -58,8 +61,11 @@ import com.learning.tasktracker.ui.components.PriorityDot
 import com.learning.tasktracker.ui.components.QuickAddBar
 import com.learning.tasktracker.ui.components.QuickDropDayRow
 import com.learning.tasktracker.ui.components.TaskDayDragState
+import com.learning.tasktracker.ui.components.TaskDragGhost
+import com.learning.tasktracker.ui.components.TaskDragHandle
 import com.learning.tasktracker.ui.components.TaskListTitle
-import com.learning.tasktracker.ui.components.draggableTaskRow
+import com.learning.tasktracker.ui.components.dayDropZone
+import com.learning.tasktracker.ui.components.draggingRowAlpha
 import com.learning.tasktracker.ui.components.rememberTaskDayDragState
 import com.learning.tasktracker.ui.theme.extendedColors
 
@@ -157,14 +163,14 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         .padding(32.dp)
                 )
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        bottom = 88.dp
-                    )
-                ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            bottom = 88.dp
+                        )
+                    ) {
                     if (dragState.isDragging) {
                         item(key = "quick_drop_targets") {
                             Column {
@@ -182,35 +188,34 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         }
                     }
                     state.groups.forEachIndexed { groupIndex, group ->
-                        item(key = "header_${group.dueDateEpochDay}") {
+                        item(key = "header_${group.groupKey}") {
                             DaySectionHeader(
                                 title = group.title,
-                                day = group.dueDateEpochDay,
+                                day = group.groupKey,
                                 dragState = dragState,
                                 topPadding = if (groupIndex == 0 && !dragState.isDragging) 4.dp else if (groupIndex == 0) 0.dp else 16.dp
                             )
                         }
                         items(group.tasks, key = { it.id }) { task ->
                             val subtasks = state.subtasksByParentId[task.id].orEmpty()
-                            AnimatedVisibility(
-                                visible = true,
-                                enter = fadeIn() + slideInVertically { it / 4 },
-                                exit = fadeOut() + slideOutVertically { -it / 4 }
-                            ) {
-                                ChecklistItemRow(
-                                    task = task,
-                                    today = state.todayEpochDay,
-                                    subtasksEnabled = state.subtasksEnabled,
-                                    subtasks = subtasks,
-                                    dragState = dragState,
-                                    onToggle = { viewModel.toggleDone(task) },
-                                    onToggleSubtask = viewModel::toggleSubtask,
-                                    onEdit = { editor = EditorState.Edit(task) },
-                                    onMoveToDay = viewModel::moveTaskToDay
-                                )
-                            }
+                            ChecklistItemRow(
+                                task = task,
+                                day = group.groupKey,
+                                today = state.todayEpochDay,
+                                subtasksEnabled = state.subtasksEnabled,
+                                subtasks = subtasks,
+                                dragState = dragState,
+                                onToggle = { viewModel.toggleDone(task) },
+                                onToggleSubtask = viewModel::toggleSubtask,
+                                onEdit = { editor = EditorState.Edit(task) },
+                                onMoveToDay = viewModel::moveTaskToDay
+                            )
                             AnyDoDivider()
                         }
+                    }
+                    }
+                    dragState.draggedTask?.let { dragged ->
+                        TaskDragGhost(task = dragged, dragState = dragState)
                     }
                 }
             }
@@ -331,6 +336,7 @@ private fun EmptyState(
 @Composable
 private fun ChecklistItemRow(
     task: TaskEntity,
+    day: Long,
     today: Long,
     subtasksEnabled: Boolean,
     subtasks: List<SubtaskEntity>,
@@ -346,15 +352,16 @@ private fun ChecklistItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .draggableTaskRow(
-                task = task,
-                dragState = dragState,
-                onTap = onEdit,
-                onDrop = onMoveToDay
-            )
+            .dayDropZone(day, dragState)
+            .draggingRowAlpha(task, dragState)
             .padding(horizontal = 4.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top
     ) {
+        TaskDragHandle(
+            task = task,
+            dragState = dragState,
+            onDrop = onMoveToDay
+        )
         CircularTaskCheckbox(
             checked = task.isDone,
             onCheckedChange = onToggle,
@@ -364,7 +371,8 @@ private fun ChecklistItemRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 14.dp)
+                .padding(start = 10.dp)
+                .clickable(onClick = onEdit)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -421,6 +429,9 @@ private fun buildTaskSubtitle(
     val parts = mutableListOf<String>()
     if (task.dueTimeMinutes != null) {
         parts += DateUtils.formatTime(task.dueTimeMinutes)
+    }
+    if (task.priority != Priority.MEDIUM) {
+        parts += task.priority.label
     }
     if (task.isRecurring) {
         parts += DateUtils.recurrenceLabel(task.recurrenceType, task.recurrenceWeekdayMask)

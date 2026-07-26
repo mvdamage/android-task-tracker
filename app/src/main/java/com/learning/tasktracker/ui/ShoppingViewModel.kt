@@ -65,6 +65,10 @@ class ShoppingViewModel(
         viewModelScope.launch { repository.clearChecked() }
     }
 
+    fun clearAll() {
+        viewModelScope.launch { repository.clearAll() }
+    }
+
     class Factory(private val repository: ShoppingRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

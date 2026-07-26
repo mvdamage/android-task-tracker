@@ -21,8 +21,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -32,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -65,6 +68,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     val titleHistory by viewModel.titleHistory.collectAsStateWithLifecycle()
     var newItemTitle by remember { mutableStateOf("") }
     var showInput by remember { mutableStateOf(false) }
+    var confirmClearAll by remember { mutableStateOf(false) }
 
     val suggestions = remember(newItemTitle, titleHistory) {
         TaskViewModel.filterTitleSuggestions(titleHistory, newItemTitle)
@@ -104,6 +108,15 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                             Icon(
                                 Icons.Outlined.DeleteSweep,
                                 contentDescription = "Очистить купленное",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (state.items.isNotEmpty()) {
+                        IconButton(onClick = { confirmClearAll = true }) {
+                            Icon(
+                                Icons.Outlined.DeleteOutline,
+                                contentDescription = "Очистить весь список",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -204,6 +217,25 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 }
             }
         }
+    }
+
+    if (confirmClearAll) {
+        AlertDialog(
+            onDismissRequest = { confirmClearAll = false },
+            title = { Text("Очистить список?") },
+            text = { Text("Будут удалены все товары — и купленные, и некупленные.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearAll()
+                        confirmClearAll = false
+                    }
+                ) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearAll = false }) { Text("Отмена") }
+            }
+        )
     }
 }
 

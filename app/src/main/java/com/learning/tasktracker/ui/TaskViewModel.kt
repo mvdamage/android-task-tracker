@@ -20,10 +20,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class TaskGroup(
-    val dueDateEpochDay: Long,
+    val dueDateEpochDay: Long?,
     val title: String,
     val tasks: List<TaskEntity>
-)
+) {
+    val groupKey: Long get() = DateUtils.toGroupKey(dueDateEpochDay)
+}
 
 data class TaskUiState(
     val groups: List<TaskGroup> = emptyList(),
@@ -72,11 +74,12 @@ class TaskViewModel(
         }
         val groups = filtered
             .groupBy { it.dueDateEpochDay }
-            .toSortedMap()
+            .entries
+            .sortedBy { (day, _) -> DateUtils.groupSortKey(day) }
             .map { (day, dayTasks) ->
                 TaskGroup(
                     dueDateEpochDay = day,
-                    title = DateUtils.sectionTitle(day, today),
+                    title = DateUtils.groupSectionTitle(day, today),
                     tasks = dayTasks
                 )
             }
@@ -115,7 +118,7 @@ class TaskViewModel(
         title: String,
         notes: String,
         priority: Priority,
-        dueDateEpochDay: Long,
+        dueDateEpochDay: Long?,
         recurrenceType: RecurrenceType,
         recurrenceWeekdayMask: Int,
         recurrenceEndEpochDay: Long?,
@@ -141,7 +144,7 @@ class TaskViewModel(
         title: String,
         notes: String,
         priority: Priority,
-        dueDateEpochDay: Long,
+        dueDateEpochDay: Long?,
         recurrenceType: RecurrenceType,
         recurrenceWeekdayMask: Int,
         recurrenceEndEpochDay: Long?,
@@ -193,8 +196,10 @@ class TaskViewModel(
         viewModelScope.launch { repository.deleteSubtask(subtask) }
     }
 
-    fun moveTaskToDay(task: TaskEntity, targetEpochDay: Long) {
-        viewModelScope.launch { repository.moveToDay(task, targetEpochDay) }
+    fun moveTaskToDay(task: TaskEntity, targetGroupKey: Long) {
+        viewModelScope.launch {
+            repository.moveToDay(task, DateUtils.fromGroupKey(targetGroupKey))
+        }
     }
 
     companion object {

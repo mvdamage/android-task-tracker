@@ -24,7 +24,7 @@ data class ExtendedColors(
 val LightExtendedColors = ExtendedColors(
     overdue = Color(0xFFFF3B30),
     overdueContainer = Color(0xFFFFEBEA),
-    priorityLow = Color(0xFF8E8E93),
+    priorityLow = Color(0xFF34C759),
     priorityMedium = Color(0xFF8E8E93),
     priorityHigh = Color(0xFFFF9500),
     shoppingPrimary = Color(0xFF0095FF),
@@ -39,7 +39,7 @@ val LightExtendedColors = ExtendedColors(
 val DarkExtendedColors = ExtendedColors(
     overdue = Color(0xFFFF453A),
     overdueContainer = Color(0xFF3A1C1C),
-    priorityLow = Color(0xFF8E8E93),
+    priorityLow = Color(0xFF30D158),
     priorityMedium = Color(0xFF8E8E93),
     priorityHigh = Color(0xFFFF9F0A),
     shoppingPrimary = Color(0xFF0095FF),
