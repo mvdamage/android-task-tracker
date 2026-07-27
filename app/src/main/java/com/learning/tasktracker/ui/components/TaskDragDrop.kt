@@ -1,9 +1,7 @@
 package com.learning.tasktracker.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -74,13 +72,33 @@ class TaskDayDragState {
 
     fun updateDragPosition(position: Offset) {
         dragPosition = position
-        hoveredDay = dropBounds.entries
+        hoveredDay = resolveHoveredDay(position)
+    }
+
+    fun refreshHoveredDay() {
+        if (dragPosition != Offset.Unspecified) {
+            hoveredDay = resolveHoveredDay(dragPosition)
+        }
+    }
+
+    private fun resolveHoveredDay(position: Offset): Long? =
+        dropBounds.entries
             .asSequence()
             .filter { (_, rect) ->
                 rect.contains(position) && viewportBounds?.overlaps(rect) != false
             }
             .minByOrNull { (_, rect) -> rect.width * rect.height }
             ?.key
+
+    fun finishDrag(onDrop: (TaskEntity, Long) -> Unit) {
+        val targetDay = hoveredDay
+        val dragged = draggedTask
+        if (dragged != null && targetDay != null &&
+            targetDay != DateUtils.toGroupKey(dragged.dueDateEpochDay)
+        ) {
+            onDrop(dragged, targetDay)
+        }
+        clear()
     }
 
     fun updateOverlayOrigin(origin: Offset) {
@@ -168,46 +186,24 @@ fun Modifier.dayDropZone(
 fun Modifier.taskDragSource(
     task: TaskEntity,
     dragState: TaskDayDragState,
-    onDrop: (TaskEntity, Long) -> Unit,
     onTap: () -> Unit
 ): Modifier = composed {
     val haptic = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
     var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val currentCoordinates by rememberUpdatedState(layoutCoordinates)
 
     this
         .onGloballyPositioned { layoutCoordinates = it }
         .pointerInput(task.id) {
-            detectDragGesturesAfterLongPress(
-                onDragStart = { offset ->
+            detectTapGestures(
+                onTap = { onTap() },
+                onLongPress = { offset ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    val coordinates = currentCoordinates ?: return@detectDragGesturesAfterLongPress
+                    val coordinates = currentCoordinates ?: return@detectTapGestures
                     dragState.startDrag(task, coordinates.localToRoot(offset))
-                },
-                onDrag = { change, _ ->
-                    change.consume()
-                    val coordinates = currentCoordinates ?: return@detectDragGesturesAfterLongPress
-                    dragState.updateDragPosition(coordinates.localToRoot(change.position))
-                },
-                onDragEnd = {
-                    val targetDay = dragState.hoveredDay
-                    val dragged = dragState.draggedTask
-                    if (dragged != null && targetDay != null &&
-                        targetDay != DateUtils.toGroupKey(dragged.dueDateEpochDay)
-                    ) {
-                        onDrop(dragged, targetDay)
-                    }
-                    dragState.clear()
-                },
-                onDragCancel = { dragState.clear() }
+                }
             )
         }
-        .clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = onTap
-        )
 }
 
 @Composable

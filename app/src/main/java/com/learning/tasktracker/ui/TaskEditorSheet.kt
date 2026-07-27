@@ -689,14 +689,14 @@ internal fun TaskEditorSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 280.dp),
+                        .heightIn(max = 320.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     TimePicker(
                         state = timePickerState,
                         modifier = Modifier.graphicsLayer {
-                            scaleX = 0.78f
-                            scaleY = 0.78f
+                            scaleX = 0.88f
+                            scaleY = 0.88f
                         },
                         layoutType = TimePickerLayoutType.Vertical,
                         colors = TimePickerDefaults.colors(

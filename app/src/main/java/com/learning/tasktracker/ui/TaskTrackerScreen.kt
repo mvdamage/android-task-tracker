@@ -41,10 +41,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -86,11 +90,13 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val extended = MaterialTheme.extendedColors
+    var rootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val currentRootCoordinates by rememberUpdatedState(rootCoordinates)
 
     LaunchedEffect(dragState.isDragging) {
         if (!dragState.isDragging) return@LaunchedEffect
         val edgeSizePx = with(density) { 72.dp.toPx() }
-        val maxSpeedPx = with(density) { 20.dp.toPx() }
+        val maxSpeedPx = with(density) { 28.dp.toPx() }
         while (dragState.isDragging) {
             val delta = dragState.scrollDeltaForPosition(
                 dragState.dragPosition,
@@ -99,6 +105,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             )
             if (delta != 0f) {
                 listState.scrollBy(delta)
+                dragState.refreshHoveredDay()
             }
             delay(16)
         }
@@ -168,9 +175,31 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 .fillMaxSize()
                 .padding(padding)
                 .onGloballyPositioned { coordinates ->
+                    rootCoordinates = coordinates
                     val bounds = coordinates.boundsInRoot()
                     dragState.updateOverlayOrigin(Offset(bounds.left, bounds.top))
                     dragState.updateViewport(bounds)
+                }
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (!dragState.isDragging) continue
+                            val coordinates = currentRootCoordinates ?: continue
+                            event.changes.forEach { change ->
+                                if (change.pressed) {
+                                    dragState.updateDragPosition(
+                                        coordinates.localToRoot(change.position)
+                                    )
+                                }
+                            }
+                            if (event.changes.all { !it.pressed }) {
+                                dragState.finishDrag { task, day ->
+                                    viewModel.moveTaskToDay(task, day)
+                                }
+                            }
+                        }
+                    }
                 }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -253,8 +282,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                                     dragState = dragState,
                                     onToggle = { viewModel.toggleDone(task) },
                                     onToggleSubtask = viewModel::toggleSubtask,
-                                    onEdit = { editor = EditorState.Edit(task) },
-                                    onMoveToDay = viewModel::moveTaskToDay
+                                    onEdit = { editor = EditorState.Edit(task) }
                                 )
                                 AnyDoDivider()
                             }
@@ -391,8 +419,7 @@ private fun ChecklistItemRow(
     dragState: TaskDayDragState,
     onToggle: () -> Unit,
     onToggleSubtask: (SubtaskEntity) -> Unit,
-    onEdit: () -> Unit,
-    onMoveToDay: (TaskEntity, Long) -> Unit
+    onEdit: () -> Unit
 ) {
     val extended = MaterialTheme.extendedColors
     val overdue = task.isOverdue(today)
@@ -401,7 +428,7 @@ private fun ChecklistItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .draggingRowAlpha(task, dragState)
-            .taskDragSource(task, dragState, onMoveToDay, onTap = onEdit)
+            .taskDragSource(task, dragState, onTap = onEdit)
             .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top
     ) {
