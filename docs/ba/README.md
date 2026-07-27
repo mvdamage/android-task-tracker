@@ -27,4 +27,4 @@
 | [features/F-002-task-lists.md](features/F-002-task-lists.md) | draft | Списки задач |
 | [features/F-003-backup-export.md](features/F-003-backup-export.md) | draft | Бэкап / экспорт |
 | [features/F-008-voice-input.md](features/F-008-voice-input.md) | draft | Голос: задачи (+дата/время), покупки (+категория) |
-| [tz/TZ-001-voice-input.md](tz/TZ-001-voice-input.md) | ready | ТЗ: голосовой ввод с парсингом атрибутов |
+| [tz/TZ-001-voice-input.md](tz/TZ-001-voice-input.md) | ready v1.2 | ТЗ: голос + парсинг атрибутов + текст дисклеймера |
