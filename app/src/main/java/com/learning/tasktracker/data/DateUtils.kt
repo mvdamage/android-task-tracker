@@ -58,14 +58,16 @@ object DateUtils {
     fun isOverdue(
         dueDateEpochDay: Long?,
         dueTimeMinutes: Int?,
+        dueTimeEndMinutes: Int? = null,
         isDone: Boolean,
         today: Long = todayEpochDay()
     ): Boolean {
         if (isDone || dueDateEpochDay == null) return false
         if (dueDateEpochDay < today) return true
         if (dueDateEpochDay > today) return false
-        val time = dueTimeMinutes ?: return false
-        return time < nowMinutesOfDay()
+        val start = dueTimeMinutes ?: return false
+        val deadline = dueTimeEndMinutes?.takeIf { it > start } ?: start
+        return deadline < nowMinutesOfDay()
     }
 
     fun nowMinutesOfDay(): Int {
@@ -76,10 +78,23 @@ object DateUtils {
     fun formatTime(minutes: Int): String =
         LocalTime.of(minutes / 60, minutes % 60).format(timeFormatter)
 
-    fun formatDueLabel(epochDay: Long?, timeMinutes: Int?): String {
+    fun formatTaskTime(startMinutes: Int?, endMinutes: Int? = null): String? {
+        if (startMinutes == null) return null
+        val end = endMinutes?.takeIf { it > startMinutes }
+        return if (end == null) formatTime(startMinutes) else "${formatTime(startMinutes)}–${formatTime(end)}"
+    }
+
+    fun formatDueLabel(epochDay: Long?, timeMinutes: Int?, timeEndMinutes: Int? = null): String {
         if (epochDay == null) return "Без даты"
         val date = formatShort(epochDay)
-        return if (timeMinutes != null) "$date, ${formatTime(timeMinutes)}" else date
+        val time = formatTaskTime(timeMinutes, timeEndMinutes)
+        return if (time != null) "$date, $time" else date
+    }
+
+    fun normalizedTimePeriod(startMinutes: Int?, endMinutes: Int?): Pair<Int?, Int?> {
+        if (startMinutes == null) return null to null
+        val end = endMinutes?.takeIf { it > startMinutes }
+        return startMinutes to end
     }
 
     fun minutesToHourMinute(minutes: Int): Pair<Int, Int> = minutes / 60 to minutes % 60

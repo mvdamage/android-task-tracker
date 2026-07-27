@@ -122,7 +122,8 @@ class TaskViewModel(
         recurrenceType: RecurrenceType,
         recurrenceWeekdayMask: Int,
         recurrenceEndEpochDay: Long?,
-        dueTimeMinutes: Int?
+        dueTimeMinutes: Int?,
+        dueTimeEndMinutes: Int?
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -134,7 +135,8 @@ class TaskViewModel(
                 recurrenceType = recurrenceType,
                 recurrenceWeekdayMask = recurrenceWeekdayMask,
                 recurrenceEndEpochDay = recurrenceEndEpochDay,
-                dueTimeMinutes = dueTimeMinutes
+                dueTimeMinutes = dueTimeMinutes,
+                dueTimeEndMinutes = dueTimeEndMinutes
             )
         }
     }
@@ -148,7 +150,8 @@ class TaskViewModel(
         recurrenceType: RecurrenceType,
         recurrenceWeekdayMask: Int,
         recurrenceEndEpochDay: Long?,
-        dueTimeMinutes: Int?
+        dueTimeMinutes: Int?,
+        dueTimeEndMinutes: Int?
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -161,7 +164,8 @@ class TaskViewModel(
                     recurrenceType = recurrenceType,
                     recurrenceWeekdayMask = recurrenceWeekdayMask,
                     recurrenceEndEpochDay = recurrenceEndEpochDay,
-                    dueTimeMinutes = dueTimeMinutes
+                    dueTimeMinutes = dueTimeMinutes,
+                    dueTimeEndMinutes = dueTimeEndMinutes
                 )
             )
         }

@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -35,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,6 +72,7 @@ import com.learning.tasktracker.ui.components.draggingRowAlpha
 import com.learning.tasktracker.ui.components.rememberTaskDayDragState
 import com.learning.tasktracker.ui.components.taskDragSource
 import com.learning.tasktracker.ui.theme.extendedColors
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +83,26 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     var confirmClear by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     val dragState = rememberTaskDayDragState()
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
     val extended = MaterialTheme.extendedColors
+
+    LaunchedEffect(dragState.isDragging) {
+        if (!dragState.isDragging) return@LaunchedEffect
+        val edgeSizePx = with(density) { 72.dp.toPx() }
+        val maxSpeedPx = with(density) { 20.dp.toPx() }
+        while (dragState.isDragging) {
+            val delta = dragState.scrollDeltaForPosition(
+                dragState.dragPosition,
+                edgeSizePx,
+                maxSpeedPx
+            )
+            if (delta != 0f) {
+                listState.scrollBy(delta)
+            }
+            delay(16)
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -176,7 +200,12 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 }
 
                 LazyColumn(
-                    modifier = Modifier.weight(1f),
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .onGloballyPositioned { coordinates ->
+                            dragState.updateScrollArea(coordinates.boundsInRoot())
+                        },
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
@@ -265,7 +294,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         result.recurrenceType,
                         result.recurrenceWeekdayMask,
                         result.recurrenceEndEpochDay,
-                        result.dueTimeMinutes
+                        result.dueTimeMinutes,
+                        result.dueTimeEndMinutes
                     )
                     is EditorState.Edit -> viewModel.updateTask(
                         current.task,
@@ -276,7 +306,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         result.recurrenceType,
                         result.recurrenceWeekdayMask,
                         result.recurrenceEndEpochDay,
-                        result.dueTimeMinutes
+                        result.dueTimeMinutes,
+                        result.dueTimeEndMinutes
                     )
                 }
                 editor = null
@@ -431,7 +462,7 @@ private fun buildTaskSubtitle(
 ): String {
     val parts = mutableListOf<String>()
     if (task.dueTimeMinutes != null) {
-        parts += DateUtils.formatTime(task.dueTimeMinutes)
+        parts += DateUtils.formatTaskTime(task.dueTimeMinutes, task.dueTimeEndMinutes).orEmpty()
     }
     if (task.priority != Priority.MEDIUM) {
         parts += task.priority.label

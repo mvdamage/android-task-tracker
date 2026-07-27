@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -31,6 +33,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.material3.TimePickerLayoutType
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
@@ -42,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.learning.tasktracker.data.DateUtils
@@ -72,8 +77,11 @@ internal data class TaskEditorResult(
     val recurrenceType: RecurrenceType,
     val recurrenceWeekdayMask: Int,
     val recurrenceEndEpochDay: Long?,
-    val dueTimeMinutes: Int?
+    val dueTimeMinutes: Int?,
+    val dueTimeEndMinutes: Int?
 )
+
+private enum class TimePickerTarget { Start, End }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -111,11 +119,18 @@ internal fun TaskEditorSheet(
     var dueTimeMinutes by remember(state) {
         mutableStateOf(existing?.dueTimeMinutes)
     }
+    var dueTimeEndMinutes by remember(state) {
+        mutableStateOf(existing?.dueTimeEndMinutes)
+    }
+    var periodMode by remember(state) {
+        mutableStateOf(existing?.dueTimeEndMinutes != null)
+    }
     var recurrenceEndEpochDay by remember(state) {
         mutableStateOf(existing?.recurrenceEndEpochDay)
     }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var timePickerTarget by remember { mutableStateOf(TimePickerTarget.Start) }
     var showEndDatePicker by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
     var newSubtaskTitle by remember(state) { mutableStateOf("") }
@@ -139,9 +154,14 @@ internal fun TaskEditorSheet(
     } ?: "Без даты"
     val timeLabel = when {
         dueDateEpochDay == null -> "Нужна дата"
+        dueTimeMinutes == null -> "Без времени"
+        periodMode && dueTimeEndMinutes != null ->
+            DateUtils.formatTaskTime(dueTimeMinutes, dueTimeEndMinutes).orEmpty()
         dueTimeMinutes != null -> DateUtils.formatTime(dueTimeMinutes!!)
         else -> "Без времени"
     }
+    val startTimeLabel = dueTimeMinutes?.let { DateUtils.formatTime(it) } ?: "Не задано"
+    val endTimeLabel = dueTimeEndMinutes?.let { DateUtils.formatTime(it) } ?: "Не задано"
     val timeEnabled = dueDateEpochDay != null
     val recurrenceLabel = if (recurrenceType == RecurrenceType.NONE) {
         "Не повторяется"
@@ -173,6 +193,10 @@ internal fun TaskEditorSheet(
                 TextButton(
                     onClick = {
                         if (title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid) {
+                            val (startTime, endTime) = DateUtils.normalizedTimePeriod(
+                                if (dueDateEpochDay == null) null else dueTimeMinutes,
+                                if (dueDateEpochDay == null || !periodMode) null else dueTimeEndMinutes
+                            )
                             onSave(
                                 TaskEditorResult(
                                     title = title,
@@ -190,7 +214,8 @@ internal fun TaskEditorSheet(
                                     } else {
                                         recurrenceEndEpochDay
                                     },
-                                    dueTimeMinutes = if (dueDateEpochDay == null) null else dueTimeMinutes
+                                    dueTimeMinutes = startTime,
+                                    dueTimeEndMinutes = endTime
                                 )
                             )
                         }
@@ -241,12 +266,63 @@ internal fun TaskEditorSheet(
             )
             HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
 
-            EditorOptionRow(
-                label = "Время",
-                value = timeLabel,
-                enabled = timeEnabled,
-                onClick = { showTimePicker = true }
-            )
+            if (timeEnabled) {
+                FlowRow(
+                    modifier = Modifier.padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = periodMode,
+                        onClick = {
+                            periodMode = !periodMode
+                            if (periodMode) {
+                                if (dueTimeMinutes == null) {
+                                    dueTimeMinutes = DateUtils.hourMinuteToMinutes(9, 0)
+                                }
+                                val start = dueTimeMinutes!!
+                                val end = dueTimeEndMinutes
+                                if (end == null || end <= start) {
+                                    dueTimeEndMinutes = (start + 30).coerceAtMost(1439)
+                                }
+                            } else {
+                                dueTimeEndMinutes = null
+                            }
+                        },
+                        label = { Text("Период") }
+                    )
+                }
+            }
+
+            if (periodMode && timeEnabled) {
+                EditorOptionRow(
+                    label = "С",
+                    value = startTimeLabel,
+                    onClick = {
+                        timePickerTarget = TimePickerTarget.Start
+                        showTimePicker = true
+                    }
+                )
+                HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
+                EditorOptionRow(
+                    label = "До",
+                    value = endTimeLabel,
+                    onClick = {
+                        timePickerTarget = TimePickerTarget.End
+                        showTimePicker = true
+                    }
+                )
+            } else {
+                EditorOptionRow(
+                    label = "Время",
+                    value = timeLabel,
+                    enabled = timeEnabled,
+                    onClick = {
+                        timePickerTarget = TimePickerTarget.Start
+                        showTimePicker = true
+                    }
+                )
+            }
             if (timeEnabled) {
                 FlowRow(
                     modifier = Modifier.padding(bottom = 4.dp),
@@ -257,19 +333,51 @@ internal fun TaskEditorSheet(
                         val minutes = DateUtils.hourMinuteToMinutes(hour, minute)
                         FilterChip(
                             selected = dueTimeMinutes == minutes,
-                            onClick = { dueTimeMinutes = minutes },
+                            onClick = {
+                                dueTimeMinutes = minutes
+                                if (periodMode) {
+                                    dueTimeEndMinutes?.let { end ->
+                                        if (end <= minutes) {
+                                            dueTimeEndMinutes = (minutes + 30).coerceAtMost(1439)
+                                        }
+                                    } ?: run {
+                                        dueTimeEndMinutes = (minutes + 30).coerceAtMost(1439)
+                                    }
+                                }
+                            },
                             label = { Text(DateUtils.formatTime(minutes)) }
                         )
                     }
                     FilterChip(
                         selected = false,
-                        onClick = { dueTimeMinutes = DateUtils.nowMinutesOfDay() },
+                        onClick = {
+                            val minutes = DateUtils.nowMinutesOfDay()
+                            dueTimeMinutes = minutes
+                            if (periodMode) {
+                                dueTimeEndMinutes = (minutes + 30).coerceAtMost(1439)
+                            }
+                        },
                         label = { Text("Сейчас") }
                     )
+                    if (periodMode && dueTimeMinutes != null) {
+                        listOf(30 to "+30м", 60 to "+1ч", 120 to "+2ч").forEach { (delta, label) ->
+                            FilterChip(
+                                selected = dueTimeEndMinutes == (dueTimeMinutes!! + delta).coerceAtMost(1439),
+                                onClick = {
+                                    dueTimeEndMinutes = (dueTimeMinutes!! + delta).coerceAtMost(1439)
+                                },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
                     if (dueTimeMinutes != null) {
                         FilterChip(
                             selected = false,
-                            onClick = { dueTimeMinutes = null },
+                            onClick = {
+                                dueTimeMinutes = null
+                                dueTimeEndMinutes = null
+                                periodMode = false
+                            },
                             label = { Text("Без времени") }
                         )
                     }
@@ -483,6 +591,8 @@ internal fun TaskEditorSheet(
                         onClick = {
                             dueDateEpochDay = null
                             dueTimeMinutes = null
+                            dueTimeEndMinutes = null
+                            periodMode = false
                             recurrenceType = RecurrenceType.NONE
                             recurrenceWeekdayMask = 0
                             recurrenceEndEpochDay = null
@@ -498,45 +608,136 @@ internal fun TaskEditorSheet(
     }
 
     if (showTimePicker && timeEnabled) {
-        val timePickerInitial = dueTimeMinutes ?: DateUtils.hourMinuteToMinutes(9, 0)
+        val timePickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val timePickerInitial = when (timePickerTarget) {
+            TimePickerTarget.Start -> dueTimeMinutes ?: DateUtils.hourMinuteToMinutes(9, 0)
+            TimePickerTarget.End -> dueTimeEndMinutes
+                ?: ((dueTimeMinutes ?: DateUtils.hourMinuteToMinutes(9, 0)) + 30).coerceAtMost(1439)
+        }
         val (initialHour, initialMinute) = DateUtils.minutesToHourMinute(timePickerInitial)
         val timePickerState = rememberTimePickerState(
             initialHour = initialHour,
             initialMinute = initialMinute,
             is24Hour = true
         )
-        AlertDialog(
+        val pickerTitle = when (timePickerTarget) {
+            TimePickerTarget.Start -> "Начало"
+            TimePickerTarget.End -> "Конец"
+        }
+        ModalBottomSheet(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("Время") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        dueTimeMinutes = DateUtils.hourMinuteToMinutes(
-                            timePickerState.hour,
-                            timePickerState.minute
+            sheetState = timePickerSheetState,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { showTimePicker = false }) { Text("Отмена") }
+                    Text(
+                        text = pickerTitle,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    TextButton(
+                        onClick = {
+                            val picked = DateUtils.hourMinuteToMinutes(
+                                timePickerState.hour,
+                                timePickerState.minute
+                            )
+                            when (timePickerTarget) {
+                                TimePickerTarget.Start -> {
+                                    dueTimeMinutes = picked
+                                    if (periodMode) {
+                                        dueTimeEndMinutes?.let { end ->
+                                            if (end <= picked) {
+                                                dueTimeEndMinutes = (picked + 30).coerceAtMost(1439)
+                                            }
+                                        } ?: run {
+                                            dueTimeEndMinutes = (picked + 30).coerceAtMost(1439)
+                                        }
+                                    }
+                                }
+                                TimePickerTarget.End -> {
+                                    val start = dueTimeMinutes ?: DateUtils.hourMinuteToMinutes(9, 0)
+                                    if (dueTimeMinutes == null) {
+                                        dueTimeMinutes = start
+                                    }
+                                    dueTimeEndMinutes = if (picked <= start) {
+                                        (start + 30).coerceAtMost(1439)
+                                    } else {
+                                        picked
+                                    }
+                                    periodMode = true
+                                }
+                            }
+                            showTimePicker = false
+                        }
+                    ) {
+                        Text(
+                            "Готово",
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        showTimePicker = false
                     }
-                ) { Text("OK") }
-            },
-            dismissButton = {
-                Row {
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TimePicker(
+                        state = timePickerState,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = 0.78f
+                            scaleY = 0.78f
+                        },
+                        layoutType = TimePickerLayoutType.Vertical,
+                        colors = TimePickerDefaults.colors(
+                            timeSelectorSelectedContainerColor =
+                                MaterialTheme.colorScheme.primaryContainer,
+                            timeSelectorSelectedContentColor =
+                                MaterialTheme.colorScheme.onPrimaryContainer,
+                            timeSelectorUnselectedContainerColor =
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            timeSelectorUnselectedContentColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            selectorColor = MaterialTheme.colorScheme.primary,
+                            clockDialColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                            clockDialSelectedContentColor = MaterialTheme.colorScheme.onSurface,
+                            clockDialUnselectedContentColor =
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
                     TextButton(
                         onClick = {
                             dueTimeMinutes = null
+                            dueTimeEndMinutes = null
+                            periodMode = false
                             showTimePicker = false
                         }
-                    ) { Text("Без времени") }
-                    TextButton(onClick = { showTimePicker = false }) { Text("Отмена") }
+                    ) {
+                        Text(
+                            "Без времени",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            },
-            text = {
-                TimePicker(
-                    state = timePickerState,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
-        )
+        }
     }
 
     if (showEndDatePicker) {

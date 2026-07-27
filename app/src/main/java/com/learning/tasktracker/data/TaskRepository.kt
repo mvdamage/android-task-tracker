@@ -19,13 +19,15 @@ class TaskRepository(
         recurrenceType: RecurrenceType = RecurrenceType.NONE,
         recurrenceWeekdayMask: Int = 0,
         recurrenceEndEpochDay: Long? = null,
-        dueTimeMinutes: Int? = null
+        dueTimeMinutes: Int? = null,
+        dueTimeEndMinutes: Int? = null
     ) {
         val alignedDue = DateUtils.alignDueDate(
             dueDateEpochDay,
             recurrenceType,
             recurrenceWeekdayMask
         )
+        val (startTime, endTime) = DateUtils.normalizedTimePeriod(dueTimeMinutes, dueTimeEndMinutes)
         dao.insert(
             TaskEntity(
                 title = title.trim(),
@@ -35,7 +37,8 @@ class TaskRepository(
                 recurrenceType = recurrenceType,
                 recurrenceWeekdayMask = recurrenceWeekdayMask,
                 recurrenceEndEpochDay = recurrenceEndEpochDay,
-                dueTimeMinutes = if (alignedDue == null) null else dueTimeMinutes
+                dueTimeMinutes = if (alignedDue == null) null else startTime,
+                dueTimeEndMinutes = if (alignedDue == null) null else endTime
             )
         )
     }
@@ -46,10 +49,15 @@ class TaskRepository(
             task.recurrenceType,
             task.recurrenceWeekdayMask
         )
+        val (startTime, endTime) = DateUtils.normalizedTimePeriod(
+            task.dueTimeMinutes,
+            task.dueTimeEndMinutes
+        )
         dao.update(
             task.copy(
                 dueDateEpochDay = alignedDue,
-                dueTimeMinutes = if (alignedDue == null) null else task.dueTimeMinutes,
+                dueTimeMinutes = if (alignedDue == null) null else startTime,
+                dueTimeEndMinutes = if (alignedDue == null) null else endTime,
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -62,6 +70,7 @@ class TaskRepository(
                 task.copy(
                     dueDateEpochDay = null,
                     dueTimeMinutes = null,
+                    dueTimeEndMinutes = null,
                     recurrenceType = RecurrenceType.NONE,
                     recurrenceWeekdayMask = 0,
                     recurrenceEndEpochDay = null,

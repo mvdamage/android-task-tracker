@@ -61,6 +61,7 @@ class TaskDayDragState {
     var overlayOrigin by mutableStateOf(Offset.Zero)
         private set
     private var viewportBounds: Rect? = null
+    private var scrollAreaBounds: Rect? = null
     private val dropBounds = mutableStateMapOf<Long, Rect>()
 
     val isDragging: Boolean get() = draggedTask != null
@@ -88,6 +89,32 @@ class TaskDayDragState {
 
     fun updateViewport(bounds: Rect) {
         viewportBounds = bounds
+    }
+
+    fun updateScrollArea(bounds: Rect) {
+        scrollAreaBounds = bounds
+    }
+
+    fun scrollDeltaForPosition(
+        position: Offset,
+        edgeSizePx: Float,
+        maxSpeedPx: Float
+    ): Float {
+        if (position == Offset.Unspecified) return 0f
+        val area = scrollAreaBounds ?: return 0f
+        val topEdge = area.top + edgeSizePx
+        val bottomEdge = area.bottom - edgeSizePx
+        return when {
+            position.y < topEdge -> {
+                val intensity = ((topEdge - position.y) / edgeSizePx).coerceIn(0f, 1f)
+                -intensity * maxSpeedPx
+            }
+            position.y > bottomEdge -> {
+                val intensity = ((position.y - bottomEdge) / edgeSizePx).coerceIn(0f, 1f)
+                intensity * maxSpeedPx
+            }
+            else -> 0f
+        }
     }
 
     fun registerDropZone(day: Long, rect: Rect, merge: Boolean = true) {

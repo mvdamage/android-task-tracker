@@ -20,11 +20,13 @@ data class TaskEntity(
     val recurrenceEndEpochDay: Long? = null,
     /** Minutes from midnight (0–1439); null = all-day task. */
     val dueTimeMinutes: Int? = null,
+    /** End of time window (exclusive display as range); null = point in time only. */
+    val dueTimeEndMinutes: Int? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     fun isOverdue(today: Long = DateUtils.todayEpochDay()): Boolean =
-        DateUtils.isOverdue(dueDateEpochDay, dueTimeMinutes, isDone, today)
+        DateUtils.isOverdue(dueDateEpochDay, dueTimeMinutes, dueTimeEndMinutes, isDone, today)
 
     val isRecurring: Boolean get() = recurrenceType != RecurrenceType.NONE
 }
