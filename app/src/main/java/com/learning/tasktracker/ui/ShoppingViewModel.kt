@@ -60,7 +60,7 @@ class ShoppingViewModel(
             emptyList()
         )
 
-    private val categoryByTitle = repository.observeItems()
+    val categoryIdByTitleLower: StateFlow<Map<String, Long?>> = repository.observeItems()
         .map { items ->
             items.groupBy { it.title.trim().lowercase() }
                 .mapValues { (_, group) ->
@@ -83,7 +83,7 @@ class ShoppingViewModel(
 
     fun addSuggestedItem(title: String) {
         if (title.isBlank()) return
-        val categoryId = categoryByTitle.value[title.trim().lowercase()]
+        val categoryId = categoryIdByTitleLower.value[title.trim().lowercase()]
         addItem(title, categoryId)
     }
 

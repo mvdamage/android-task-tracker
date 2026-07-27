@@ -28,13 +28,13 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
@@ -47,17 +47,23 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.learning.tasktracker.R
 import com.learning.tasktracker.data.ShoppingCategoryEntity
 import com.learning.tasktracker.data.ShoppingItemEntity
 import com.learning.tasktracker.ui.components.AnyDoDivider
@@ -66,12 +72,36 @@ import com.learning.tasktracker.ui.components.HorizontalSuggestionPills
 import com.learning.tasktracker.ui.components.QuickAddBar
 import com.learning.tasktracker.ui.components.ShoppingProgressBar
 import com.learning.tasktracker.ui.theme.extendedColors
+import com.learning.tasktracker.ui.voice.ShoppingVoiceConfirmSheet
+import com.learning.tasktracker.ui.voice.VoiceCaptureDialogs
+import com.learning.tasktracker.ui.voice.VoiceCaptureFabColumn
+import com.learning.tasktracker.ui.voice.rememberVoiceCaptureSession
+import com.learning.tasktracker.voice.ShoppingVoiceLine
+import com.learning.tasktracker.voice.ShoppingVoiceParser
+import kotlinx.coroutines.launch
+
+private val ShoppingVoiceLinesSaver = Saver<List<ShoppingVoiceLine>?, List<Any?>>(
+    save = { lines ->
+        lines?.flatMap { listOf(it.title, it.categoryId, it.truncated) }
+    },
+    restore = { saved ->
+        if (saved.isEmpty()) null
+        else saved.chunked(3).map { chunk ->
+            ShoppingVoiceLine(
+                title = chunk[0] as String,
+                categoryId = chunk[1] as Long?,
+                truncated = chunk[2] as Boolean
+            )
+        }
+    }
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val titleHistory by viewModel.titleHistory.collectAsStateWithLifecycle()
+    val categoryIdByTitleLower by viewModel.categoryIdByTitleLower.collectAsStateWithLifecycle()
     val pendingDeleteCategory by viewModel.pendingDeleteCategory.collectAsStateWithLifecycle()
     var newItemTitle by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableLongStateOf(0L) }
@@ -80,7 +110,28 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     var editingItem by remember { mutableStateOf<ShoppingItemEntity?>(null) }
     var confirmClearChecked by remember { mutableStateOf(false) }
     var deleteCategoryItemCount by remember { mutableIntStateOf(0) }
+    var voiceConfirmLines by rememberSaveable(stateSaver = ShoppingVoiceLinesSaver) {
+        mutableStateOf(null)
+    }
+    var voiceEmptyError by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val inputFocusRequester = remember { FocusRequester() }
+    val voiceSession = rememberVoiceCaptureSession(
+        onTextRecognized = { text ->
+            val lines = ShoppingVoiceParser.parseShoppingVoice(
+                raw = text,
+                categories = state.categories,
+                categoryIdByTitleLower = categoryIdByTitleLower
+            )
+            if (lines.isEmpty()) {
+                voiceEmptyError = true
+            } else {
+                voiceConfirmLines = lines
+            }
+        }
+    )
 
     LaunchedEffect(pendingDeleteCategory) {
         deleteCategoryItemCount = pendingDeleteCategory?.let {
@@ -133,6 +184,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 windowInsets = WindowInsets(0, 0, 0, 0),
@@ -168,15 +220,11 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showInput = true },
-                modifier = Modifier.padding(bottom = 8.dp),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Добавить товар")
-            }
+            VoiceCaptureFabColumn(
+                onPrimaryClick = { showInput = true },
+                primaryContentDescription = "Добавить товар",
+                onMicClick = voiceSession.onMicClick
+            )
         }
     ) { padding ->
         Column(
@@ -325,6 +373,41 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
             onConfirmDeleteCategory = viewModel::confirmDeleteCategory,
             onDismissDeleteCategory = viewModel::dismissDeleteCategory,
             onDismiss = { showCategoriesSheet = false }
+        )
+    }
+
+    VoiceCaptureDialogs(session = voiceSession)
+
+    if (voiceEmptyError) {
+        AlertDialog(
+            onDismissRequest = { voiceEmptyError = false },
+            title = { Text(stringResource(R.string.voice_error_title)) },
+            text = { Text(stringResource(R.string.voice_error_no_shopping_items)) },
+            confirmButton = {
+                TextButton(onClick = { voiceEmptyError = false }) {
+                    Text(stringResource(R.string.voice_ok))
+                }
+            }
+        )
+    }
+
+    voiceConfirmLines?.let { lines ->
+        ShoppingVoiceConfirmSheet(
+            lines = lines,
+            categories = state.categories,
+            onDismiss = { voiceConfirmLines = null },
+            onConfirm = { confirmed ->
+                confirmed.forEach { line ->
+                    viewModel.addItem(line.title, line.categoryId)
+                }
+                val count = confirmed.size
+                voiceConfirmLines = null
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = context.getString(R.string.voice_snackbar_shopping_added, count)
+                    )
+                }
+            }
         )
     }
 

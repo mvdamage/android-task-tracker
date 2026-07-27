@@ -21,17 +21,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,7 +40,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,13 +54,16 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.learning.tasktracker.R
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.Priority
+import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SubtaskEntity
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
@@ -76,7 +81,40 @@ import com.learning.tasktracker.ui.components.draggingRowAlpha
 import com.learning.tasktracker.ui.components.rememberTaskDayDragState
 import com.learning.tasktracker.ui.components.taskDragSource
 import com.learning.tasktracker.ui.theme.extendedColors
+import com.learning.tasktracker.ui.voice.TaskVoiceConfirmSheet
+import com.learning.tasktracker.ui.voice.VoiceCaptureDialogs
+import com.learning.tasktracker.ui.voice.VoiceCaptureFabColumn
+import com.learning.tasktracker.ui.voice.rememberVoiceCaptureSession
+import com.learning.tasktracker.voice.TaskVoiceParseResult
+import com.learning.tasktracker.voice.TaskVoiceParser
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.time.LocalDateTime
+import java.time.ZoneId
+
+private val TaskVoiceParseResultSaver = Saver<TaskVoiceParseResult?, List<Any?>>(
+    save = { result ->
+        result?.let {
+            listOf(
+                it.title,
+                it.dueDateEpochDay,
+                it.dueTimeMinutes,
+                it.dueTimeEndMinutes,
+                it.truncated
+            )
+        }
+    },
+    restore = { saved ->
+        if (saved.isEmpty()) null
+        else TaskVoiceParseResult(
+            title = saved[0] as String,
+            dueDateEpochDay = saved[1] as Long?,
+            dueTimeMinutes = saved[2] as Int?,
+            dueTimeEndMinutes = saved[3] as Int?,
+            truncated = saved[4] as Boolean
+        )
+    }
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,6 +124,21 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     var editor by remember { mutableStateOf<EditorState?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var voiceConfirm by rememberSaveable(stateSaver = TaskVoiceParseResultSaver) {
+        mutableStateOf(null)
+    }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val taskAddedMessage = stringResource(R.string.voice_snackbar_task_added)
+    val voiceSession = rememberVoiceCaptureSession(
+        onTextRecognized = { text ->
+            voiceConfirm = TaskVoiceParser.parseTaskVoice(
+                raw = text,
+                now = LocalDateTime.now(),
+                zone = ZoneId.systemDefault()
+            )
+        }
+    )
     val dragState = rememberTaskDayDragState()
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -114,6 +167,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 windowInsets = WindowInsets(0, 0, 0, 0),
@@ -159,15 +213,11 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { editor = EditorState.Create },
-                modifier = Modifier.padding(bottom = 8.dp),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Новая задача")
-            }
+            VoiceCaptureFabColumn(
+                onPrimaryClick = { editor = EditorState.Create },
+                primaryContentDescription = "Новая задача",
+                onMicClick = voiceSession.onMicClick
+            )
         }
     ) { padding ->
         Box(
@@ -339,6 +389,32 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     )
                 }
                 editor = null
+            }
+        )
+    }
+
+    VoiceCaptureDialogs(session = voiceSession)
+
+    voiceConfirm?.let { parsed ->
+        TaskVoiceConfirmSheet(
+            parsed = parsed,
+            onDismiss = { voiceConfirm = null },
+            onConfirm = { result ->
+                viewModel.addTask(
+                    title = result.title,
+                    notes = "",
+                    priority = Priority.MEDIUM,
+                    dueDateEpochDay = result.dueDateEpochDay,
+                    recurrenceType = RecurrenceType.NONE,
+                    recurrenceWeekdayMask = 0,
+                    recurrenceEndEpochDay = null,
+                    dueTimeMinutes = result.dueTimeMinutes,
+                    dueTimeEndMinutes = result.dueTimeEndMinutes
+                )
+                voiceConfirm = null
+                scope.launch {
+                    snackbarHostState.showSnackbar(taskAddedMessage)
+                }
             }
         )
     }

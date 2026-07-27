@@ -1,4 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Трекер задач</string>
+
+    <string name="voice_mic_content_description">Добавить голосом</string>
+    <string name="voice_disclaimer_title">Распознавание речи</string>
+    <string name="voice_disclaimer_body">Чтобы диктовать задачи и покупки, приложению нужен доступ к микрофону. Распознавание выполняется средствами Android и может потребовать подключение к интернету. Запись голоса в приложении не сохраняется.</string>
+    <string name="voice_disclaimer_continue">Продолжить</string>
+    <string name="voice_disclaimer_cancel">Отмена</string>
+    <string name="voice_permission_title">Доступ к микрофону</string>
+    <string name="voice_permission_rationale">Микрофон нужен, чтобы диктовать задачи и покупки</string>
+    <string name="voice_permission_allow">Разрешить</string>
+    <string name="voice_permission_denied">Без доступа к микрофону голосовой ввод недоступен. Можно разрешить его в настройках приложения или добавить запись вручную.</string>
+    <string name="voice_open_settings">Открыть настройки</string>
+    <string name="voice_listening_title">Говорите…</string>
+    <string name="voice_listening_body">Диктуйте задачу или список. Нажмите «Готово», когда закончите.</string>
+    <string name="voice_done">Готово</string>
+    <string name="voice_processing_title">Распознаём…</string>
+    <string name="voice_processing_body">Обрабатываем речь</string>
+    <string name="voice_error_title">Не удалось</string>
+    <string name="voice_ok">OK</string>
+    <string name="voice_error_microphone">Ошибка микрофона. Попробуйте ещё раз</string>
+    <string name="voice_error_network">Для распознавания речи нужен интернет</string>
+    <string name="voice_error_no_match">Не удалось распознать речь</string>
+    <string name="voice_error_speech_timeout">Речь не распознана. Попробуйте ещё раз</string>
+    <string name="voice_error_busy">Распознавание занято. Подождите</string>
+    <string name="voice_error_unavailable">Распознавание речи недоступно на устройстве</string>
+    <string name="voice_confirm_task_title">Новая задача</string>
+    <string name="voice_confirm_task_name_hint">Название задачи</string>
+    <string name="voice_confirm_shopping_title">Новые покупки</string>
+    <string name="voice_title_truncated">Текст обрезан до 200 символов</string>
+    <string name="voice_chip_today">Сегодня</string>
+    <string name="voice_chip_tomorrow">Завтра</string>
+    <string name="voice_chip_clear_due">Сбросить</string>
+    <string name="voice_date_label">Дата</string>
+    <string name="voice_time_label">Время</string>
+    <string name="voice_time_from">С</string>
+    <string name="voice_time_to">До</string>
+    <string name="voice_period_chip">Период</string>
+    <string name="voice_clear_time">Без времени</string>
+    <string name="voice_add">Добавить</string>
+    <string name="voice_add_count">Добавить (%1$d)</string>
+    <string name="voice_remove_line">Удалить пункт</string>
+    <string name="voice_snackbar_task_added">Задача добавлена</string>
+    <string name="voice_snackbar_shopping_added">Добавлено: %1$d</string>
+    <string name="voice_error_no_shopping_items">Нет пунктов для добавления</string>
 </resources>

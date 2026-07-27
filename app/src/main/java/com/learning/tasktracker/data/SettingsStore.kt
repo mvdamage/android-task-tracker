@@ -29,8 +29,16 @@ class SettingsStore(context: Context) {
         prefs.edit().putBoolean(KEY_SUBTASKS_ENABLED, enabled).apply()
     }
 
+    fun isVoiceDisclaimerAccepted(): Boolean =
+        prefs.getBoolean(KEY_VOICE_DISCLAIMER_ACCEPTED, false)
+
+    fun setVoiceDisclaimerAccepted(accepted: Boolean) {
+        prefs.edit().putBoolean(KEY_VOICE_DISCLAIMER_ACCEPTED, accepted).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "app_settings"
         private const val KEY_SUBTASKS_ENABLED = "subtasks_enabled"
+        private const val KEY_VOICE_DISCLAIMER_ACCEPTED = "voice_disclaimer_accepted"
     }
 }
