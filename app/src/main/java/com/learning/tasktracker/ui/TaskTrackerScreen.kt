@@ -54,6 +54,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -189,7 +190,10 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showSettings = true }) {
+                    IconButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier.testTag(TestTags.SETTINGS_BUTTON)
+                    ) {
                         Icon(
                             Icons.Outlined.Settings,
                             contentDescription = "Настройки",
@@ -197,7 +201,10 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         )
                     }
                     if (state.doneCount > 0) {
-                        IconButton(onClick = { confirmClear = true }) {
+                        IconButton(
+                            onClick = { confirmClear = true },
+                            modifier = Modifier.testTag(TestTags.CLEAR_DONE_BUTTON)
+                        ) {
                             Icon(
                                 Icons.Outlined.DeleteSweep,
                                 contentDescription = "Очистить выполненные",
@@ -256,7 +263,8 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 QuickAddBar(
                     placeholder = "Добавить задачу…",
                     onClick = { editor = EditorState.Create },
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    testTag = TestTags.QUICK_ADD_TASK
                 )
 
                 if (dragState.isDragging) {
@@ -299,7 +307,12 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                             selectedIndex = TaskFilter.entries.indexOf(state.filter),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 4.dp)
+                                .padding(horizontal = 4.dp),
+                            testTags = listOf(
+                                TestTags.FILTER_ALL,
+                                TestTags.FILTER_ACTIVE,
+                                TestTags.FILTER_DONE
+                            )
                         )
                     }
 

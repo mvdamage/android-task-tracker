@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.learning.tasktracker.data.DateUtils
@@ -220,7 +221,8 @@ internal fun TaskEditorSheet(
                             )
                         }
                     },
-                    enabled = title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid
+                    enabled = title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid,
+                    modifier = Modifier.testTag(TestTags.TASK_EDITOR_DONE)
                 ) {
                     Text(
                         "Готово",
@@ -240,7 +242,9 @@ internal fun TaskEditorSheet(
                 singleLine = false,
                 minLines = 1,
                 maxLines = 3,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.TASK_EDITOR_TITLE),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,

@@ -19,6 +19,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.learning.tasktracker.ui.components.AppVersionLabel
 import com.learning.tasktracker.ui.theme.extendedColors
@@ -35,7 +36,8 @@ fun SettingsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.testTag(TestTags.SETTINGS_SHEET)
     ) {
         Column(
             modifier = Modifier
@@ -53,6 +55,7 @@ fun SettingsSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .testTag(TestTags.SUBTASKS_SWITCH)
                     .clickable { onSubtasksEnabledChange(!subtasksEnabled) }
                     .padding(vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically

@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -196,7 +197,10 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     )
                 },
                 actions = {
-                    IconButton(onClick = { showCategoriesSheet = true }) {
+                    IconButton(
+                        onClick = { showCategoriesSheet = true },
+                        modifier = Modifier.testTag(TestTags.CATEGORIES_BUTTON)
+                    ) {
                         Icon(
                             Icons.Outlined.Category,
                             contentDescription = "Категории",
@@ -205,7 +209,8 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                     }
                     IconButton(
                         onClick = { confirmClearChecked = true },
-                        enabled = state.checkedCount > 0
+                        enabled = state.checkedCount > 0,
+                        modifier = Modifier.testTag(TestTags.CLEAR_CHECKED_SHOPPING)
                     ) {
                         Icon(
                             Icons.Outlined.DeleteSweep,
@@ -290,7 +295,8 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
                 QuickAddBar(
                     placeholder = "Добавить в список…",
                     onClick = { showInput = true },
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    testTag = TestTags.QUICK_ADD_SHOPPING
                 )
                 if (quickSuggestions.isNotEmpty()) {
                     HorizontalSuggestionPills(

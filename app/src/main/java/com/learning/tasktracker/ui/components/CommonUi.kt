@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,10 +99,12 @@ fun AnyDoDivider(modifier: Modifier = Modifier) {
 fun QuickAddBar(
     placeholder: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    testTag: String? = null
 ) {
     Row(
         modifier = modifier
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -121,7 +124,8 @@ fun QuickAddBar(
 fun FilterSegmentRow(
     items: List<Pair<String, () -> Unit>>,
     selectedIndex: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    testTags: List<String> = emptyList()
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -129,9 +133,11 @@ fun FilterSegmentRow(
     ) {
         items.forEachIndexed { index, (label, onClick) ->
             val selected = index == selectedIndex
+            val tag = testTags.getOrNull(index)
             Column(
                 modifier = Modifier
                     .width(IntrinsicSize.Max)
+                    .then(if (tag != null) Modifier.testTag(tag) else Modifier)
                     .clickable(onClick = onClick),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {

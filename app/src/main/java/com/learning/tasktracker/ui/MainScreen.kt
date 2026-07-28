@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -56,9 +57,14 @@ fun MainScreen(
                 windowInsets = NavigationBarDefaults.windowInsets
             ) {
                 AppTab.entries.forEach { tab ->
+                    val tabTag = when (tab) {
+                        AppTab.TASKS -> TestTags.TAB_TASKS
+                        AppTab.SHOPPING -> TestTags.TAB_SHOPPING
+                    }
                     NavigationBarItem(
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
+                        modifier = Modifier.testTag(tabTag),
                         icon = {
                             val icon = if (selectedTab == tab) tab.filledIcon else tab.outlinedIcon
                             if (tab == AppTab.SHOPPING && shoppingState.activeCount > 0) {

@@ -32,6 +32,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -40,6 +41,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.learning.tasktracker.R
 import com.learning.tasktracker.TaskTrackerApp
+import com.learning.tasktracker.ui.TestTags
 import com.learning.tasktracker.voice.VoiceCaptureController
 import com.learning.tasktracker.voice.VoiceCapturePhase
 
@@ -56,6 +58,7 @@ fun VoiceCaptureFabColumn(
     ) {
         SmallFloatingActionButton(
             onClick = onMicClick,
+            modifier = Modifier.testTag(TestTags.VOICE_MIC),
             containerColor = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
@@ -67,6 +70,7 @@ fun VoiceCaptureFabColumn(
         }
         FloatingActionButton(
             onClick = onPrimaryClick,
+            modifier = Modifier.testTag(TestTags.ADD_FAB),
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
