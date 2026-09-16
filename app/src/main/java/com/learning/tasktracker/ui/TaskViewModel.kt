@@ -8,6 +8,7 @@ import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
+import com.learning.tasktracker.data.TaskViewMode
 import com.learning.tasktracker.data.SettingsStore
 import com.learning.tasktracker.data.SubtaskEntity
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +31,13 @@ data class TaskGroup(
 data class TaskUiState(
     val groups: List<TaskGroup> = emptyList(),
     val filter: TaskFilter = TaskFilter.ALL,
+    val viewMode: TaskViewMode = TaskViewMode.LIST,
+    val calendarMonthStartEpochDay: Long = DateUtils.firstDayOfMonth(),
+    val selectedCalendarDayKey: Long = DateUtils.todayEpochDay(),
+    val calendarDayTasks: List<TaskEntity> = emptyList(),
+    val calendarSelectedTitle: String = "",
+    val taskCountByDay: Map<Long, Int> = emptyMap(),
+    val undatedCount: Int = 0,
     val activeCount: Int = 0,
     val doneCount: Int = 0,
     val overdueCount: Int = 0,
@@ -43,6 +51,9 @@ class TaskViewModel(
     private val settingsStore: SettingsStore
 ) : ViewModel() {
     private val filter = MutableStateFlow(TaskFilter.ALL)
+    private val viewMode = MutableStateFlow(TaskViewMode.LIST)
+    private val calendarMonthStart = MutableStateFlow(DateUtils.firstDayOfMonth())
+    private val selectedCalendarDayKey = MutableStateFlow(DateUtils.todayEpochDay())
     private val todayTick = MutableStateFlow(DateUtils.todayEpochDay())
 
     val titleHistory: StateFlow<List<String>> = repository.observeTasks()
@@ -60,12 +71,31 @@ class TaskViewModel(
         )
 
     val uiState: StateFlow<TaskUiState> = combine(
-        repository.observeTasks(),
-        repository.observeSubtasks(),
-        filter,
-        todayTick,
-        settingsStore.subtasksEnabled
-    ) { tasks, subtasks, selectedFilter, today, subtasksEnabled ->
+        combine(
+            repository.observeTasks(),
+            repository.observeSubtasks(),
+            filter,
+            viewMode,
+            calendarMonthStart
+        ) { tasks, subtasks, selectedFilter, mode, monthStart ->
+            listOf(tasks, subtasks, selectedFilter, mode, monthStart)
+        },
+        combine(
+            selectedCalendarDayKey,
+            todayTick,
+            settingsStore.subtasksEnabled
+        ) { selectedDayKey, today, subtasksEnabled ->
+            Triple(selectedDayKey, today, subtasksEnabled)
+        }
+    ) { primary, calendarContext ->
+        @Suppress("UNCHECKED_CAST")
+        val tasks = primary[0] as List<TaskEntity>
+        @Suppress("UNCHECKED_CAST")
+        val subtasks = primary[1] as List<SubtaskEntity>
+        val selectedFilter = primary[2] as TaskFilter
+        val mode = primary[3] as TaskViewMode
+        val monthStart = primary[4] as Long
+        val (selectedDayKey, today, subtasksEnabled) = calendarContext
         val subtasksByParentId = subtasks.groupBy { it.parentTaskId }
         val filtered = when (selectedFilter) {
             TaskFilter.ALL -> tasks
@@ -83,9 +113,31 @@ class TaskViewModel(
                     tasks = dayTasks
                 )
             }
+        val taskCountByDay = filtered
+            .mapNotNull { task -> task.dueDateEpochDay?.let { it to task } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, dayTasks) -> dayTasks.size }
+        val undatedCount = filtered.count { it.dueDateEpochDay == null }
+        val calendarDayTasks = if (selectedDayKey == DateUtils.UNDATED_GROUP_KEY) {
+            filtered.filter { it.dueDateEpochDay == null }
+        } else {
+            filtered.filter { it.dueDateEpochDay == selectedDayKey }
+        }
+        val calendarSelectedTitle = if (selectedDayKey == DateUtils.UNDATED_GROUP_KEY) {
+            "Без даты"
+        } else {
+            DateUtils.groupSectionTitle(selectedDayKey, today)
+        }
         TaskUiState(
             groups = groups,
             filter = selectedFilter,
+            viewMode = mode,
+            calendarMonthStartEpochDay = monthStart,
+            selectedCalendarDayKey = selectedDayKey,
+            calendarDayTasks = calendarDayTasks,
+            calendarSelectedTitle = calendarSelectedTitle,
+            taskCountByDay = taskCountByDay,
+            undatedCount = undatedCount,
             activeCount = tasks.count { !it.isDone },
             doneCount = tasks.count { it.isDone },
             overdueCount = tasks.count { it.isOverdue(today) },
@@ -112,6 +164,34 @@ class TaskViewModel(
 
     fun setFilter(value: TaskFilter) {
         filter.value = value
+    }
+
+    fun setViewMode(value: TaskViewMode) {
+        viewMode.value = value
+        if (value == TaskViewMode.CALENDAR) {
+            val today = DateUtils.todayEpochDay()
+            calendarMonthStart.value = DateUtils.firstDayOfMonth(today)
+            selectedCalendarDayKey.value = today
+        }
+    }
+
+    fun shiftCalendarMonth(deltaMonths: Int) {
+        calendarMonthStart.value = DateUtils.shiftMonth(calendarMonthStart.value, deltaMonths)
+        val selected = selectedCalendarDayKey.value
+        if (selected != DateUtils.UNDATED_GROUP_KEY &&
+            !DateUtils.isSameMonth(selected, calendarMonthStart.value)
+        ) {
+            selectedCalendarDayKey.value = calendarMonthStart.value
+        }
+    }
+
+    fun selectCalendarDay(epochDay: Long) {
+        selectedCalendarDayKey.value = epochDay
+        calendarMonthStart.value = DateUtils.firstDayOfMonth(epochDay)
+    }
+
+    fun selectUndatedCalendarBucket() {
+        selectedCalendarDayKey.value = DateUtils.UNDATED_GROUP_KEY
     }
 
     fun addTask(

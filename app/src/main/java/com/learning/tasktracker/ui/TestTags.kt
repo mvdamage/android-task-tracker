@@ -19,4 +19,11 @@ object TestTags {
     const val SETTINGS_SHEET = "settings_sheet"
     const val SUBTASKS_SWITCH = "subtasks_switch"
     const val APP_VERSION = "app_version"
+    const val TASK_VIEW_LIST = "task_view_list"
+    const val TASK_VIEW_CALENDAR = "task_view_calendar"
+    const val CALENDAR_PREV_MONTH = "calendar_prev_month"
+    const val CALENDAR_NEXT_MONTH = "calendar_next_month"
+    const val CALENDAR_MONTH_TITLE = "calendar_month_title"
+    const val CALENDAR_UNDATED = "calendar_undated"
+    const val CALENDAR_DAY_PREFIX = "calendar_day_"
 }

@@ -17,12 +17,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -68,6 +72,7 @@ import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SubtaskEntity
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
+import com.learning.tasktracker.data.TaskViewMode
 import com.learning.tasktracker.ui.components.AnyDoDivider
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.components.DaySectionHeader
@@ -175,21 +180,65 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 title = {
                     Column {
                         Text(
-                            text = DateUtils.formatTodayHeader(state.todayEpochDay),
+                            text = when (state.viewMode) {
+                                TaskViewMode.LIST -> DateUtils.formatTodayHeader(state.todayEpochDay)
+                                TaskViewMode.CALENDAR -> state.calendarSelectedTitle
+                            },
                             style = MaterialTheme.typography.headlineLarge,
                             fontWeight = FontWeight.Bold
                         )
-                        if (state.overdueCount > 0) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "${state.overdueCount} просрочено",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = extended.overdue
-                            )
+                        when (state.viewMode) {
+                            TaskViewMode.LIST -> if (state.overdueCount > 0) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${state.overdueCount} просрочено",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = extended.overdue
+                                )
+                            }
+                            TaskViewMode.CALENDAR -> {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = DateUtils.formatMonthYear(state.calendarMonthStartEpochDay),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            val next = if (state.viewMode == TaskViewMode.LIST) {
+                                TaskViewMode.CALENDAR
+                            } else {
+                                TaskViewMode.LIST
+                            }
+                            viewModel.setViewMode(next)
+                        },
+                        modifier = Modifier.testTag(
+                            if (state.viewMode == TaskViewMode.LIST) {
+                                TestTags.TASK_VIEW_CALENDAR
+                            } else {
+                                TestTags.TASK_VIEW_LIST
+                            }
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (state.viewMode == TaskViewMode.LIST) {
+                                Icons.Outlined.CalendarMonth
+                            } else {
+                                Icons.Outlined.ViewAgenda
+                            },
+                            contentDescription = if (state.viewMode == TaskViewMode.LIST) {
+                                "Календарь"
+                            } else {
+                                "Список"
+                            },
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(
                         onClick = { showSettings = true },
                         modifier = Modifier.testTag(TestTags.SETTINGS_BUTTON)
@@ -237,27 +286,33 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     dragState.updateOverlayOrigin(Offset(bounds.left, bounds.top))
                     dragState.updateViewport(bounds)
                 }
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            if (!dragState.isDragging) continue
-                            val coordinates = currentRootCoordinates ?: continue
-                            event.changes.forEach { change ->
-                                if (change.pressed) {
-                                    dragState.updateDragPosition(
-                                        coordinates.localToRoot(change.position)
-                                    )
-                                }
-                            }
-                            if (event.changes.all { !it.pressed }) {
-                                dragState.finishDrag { task, day ->
-                                    viewModel.moveTaskToDay(task, day)
+                .then(
+                    if (state.viewMode == TaskViewMode.LIST) {
+                        Modifier.pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (!dragState.isDragging) continue
+                                    val coordinates = currentRootCoordinates ?: continue
+                                    event.changes.forEach { change ->
+                                        if (change.pressed) {
+                                            dragState.updateDragPosition(
+                                                coordinates.localToRoot(change.position)
+                                            )
+                                        }
+                                    }
+                                    if (event.changes.all { !it.pressed }) {
+                                        dragState.finishDrag { task, day ->
+                                            viewModel.moveTaskToDay(task, day)
+                                        }
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        Modifier
                     }
-                }
+                )
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 QuickAddBar(
@@ -267,7 +322,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     testTag = TestTags.QUICK_ADD_TASK
                 )
 
-                if (dragState.isDragging) {
+                if (state.viewMode == TaskViewMode.LIST && dragState.isDragging) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -286,75 +341,45 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     }
                 }
 
-                LazyColumn(
-                    state = listState,
+                FilterSegmentRow(
+                    items = TaskFilter.entries.map { filter ->
+                        filter.label to { viewModel.setFilter(filter) }
+                    },
+                    selectedIndex = TaskFilter.entries.indexOf(state.filter),
                     modifier = Modifier
-                        .weight(1f)
-                        .onGloballyPositioned { coordinates ->
-                            dragState.updateScrollArea(coordinates.boundsInRoot())
-                        },
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        bottom = 8.dp
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                    testTags = listOf(
+                        TestTags.FILTER_ALL,
+                        TestTags.FILTER_ACTIVE,
+                        TestTags.FILTER_DONE
                     )
-                ) {
-                    item(key = "filter_row") {
-                        FilterSegmentRow(
-                            items = TaskFilter.entries.map { filter ->
-                                filter.label to { viewModel.setFilter(filter) }
-                            },
-                            selectedIndex = TaskFilter.entries.indexOf(state.filter),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp),
-                            testTags = listOf(
-                                TestTags.FILTER_ALL,
-                                TestTags.FILTER_ACTIVE,
-                                TestTags.FILTER_DONE
-                            )
-                        )
-                    }
+                )
 
-                    if (state.groups.isEmpty()) {
-                        item(key = "empty_state") {
-                            EmptyState(
-                                filter = state.filter,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 32.dp)
-                            )
-                        }
-                    } else {
-                        state.groups.forEachIndexed { groupIndex, group ->
-                            item(key = "header_${group.groupKey}") {
-                                DaySectionHeader(
-                                    title = group.title,
-                                    day = group.groupKey,
-                                    dragState = dragState,
-                                    topPadding = if (groupIndex == 0) 0.dp else 12.dp
-                                )
-                            }
-                            items(group.tasks, key = { it.id }) { task ->
-                                val subtasks = state.subtasksByParentId[task.id].orEmpty()
-                                ChecklistItemRow(
-                                    task = task,
-                                    today = state.todayEpochDay,
-                                    subtasksEnabled = state.subtasksEnabled,
-                                    subtasks = subtasks,
-                                    dragState = dragState,
-                                    onToggle = { viewModel.toggleDone(task) },
-                                    onToggleSubtask = viewModel::toggleSubtask,
-                                    onEdit = { editor = EditorState.Edit(task) }
-                                )
-                                AnyDoDivider()
-                            }
-                        }
-                    }
+                when (state.viewMode) {
+                    TaskViewMode.LIST -> TaskListContent(
+                        state = state,
+                        listState = listState,
+                        dragState = dragState,
+                        viewModel = viewModel,
+                        onEditTask = { editor = EditorState.Edit(it) }
+                    )
+                    TaskViewMode.CALENDAR -> TaskCalendarContent(
+                        state = state,
+                        onPreviousMonth = { viewModel.shiftCalendarMonth(-1) },
+                        onNextMonth = { viewModel.shiftCalendarMonth(1) },
+                        onSelectDay = viewModel::selectCalendarDay,
+                        onSelectUndated = viewModel::selectUndatedCalendarBucket,
+                        onEditTask = { editor = EditorState.Edit(it) },
+                        onToggleTask = viewModel::toggleDone,
+                        onToggleSubtask = viewModel::toggleSubtask
+                    )
                 }
             }
-            dragState.draggedTask?.let { dragged ->
-                TaskDragGhost(task = dragged, dragState = dragState)
+            if (state.viewMode == TaskViewMode.LIST) {
+                dragState.draggedTask?.let { dragged ->
+                    TaskDragGhost(task = dragged, dragState = dragState)
+                }
             }
         }
     }
@@ -467,6 +492,135 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
 }
 
 @Composable
+private fun TaskListContent(
+    state: TaskUiState,
+    listState: LazyListState,
+    dragState: TaskDayDragState,
+    viewModel: TaskViewModel,
+    onEditTask: (TaskEntity) -> Unit
+) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .weight(1f)
+            .onGloballyPositioned { coordinates ->
+                dragState.updateScrollArea(coordinates.boundsInRoot())
+            },
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            bottom = 8.dp
+        )
+    ) {
+        if (state.groups.isEmpty()) {
+            item(key = "empty_state") {
+                EmptyState(
+                    filter = state.filter,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 32.dp)
+                )
+            }
+        } else {
+            state.groups.forEachIndexed { groupIndex, group ->
+                item(key = "header_${group.groupKey}") {
+                    DaySectionHeader(
+                        title = group.title,
+                        day = group.groupKey,
+                        dragState = dragState,
+                        topPadding = if (groupIndex == 0) 0.dp else 12.dp
+                    )
+                }
+                items(group.tasks, key = { it.id }) { task ->
+                    val subtasks = state.subtasksByParentId[task.id].orEmpty()
+                    ChecklistItemRow(
+                        task = task,
+                        today = state.todayEpochDay,
+                        subtasksEnabled = state.subtasksEnabled,
+                        subtasks = subtasks,
+                        dragState = dragState,
+                        enableDrag = true,
+                        onToggle = { viewModel.toggleDone(task) },
+                        onToggleSubtask = viewModel::toggleSubtask,
+                        onEdit = { onEditTask(task) }
+                    )
+                    AnyDoDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskCalendarContent(
+    state: TaskUiState,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onSelectDay: (Long) -> Unit,
+    onSelectUndated: () -> Unit,
+    onEditTask: (TaskEntity) -> Unit,
+    onToggleTask: (TaskEntity) -> Unit,
+    onToggleSubtask: (SubtaskEntity) -> Unit
+) {
+    val calendarDragState = rememberTaskDayDragState()
+    LazyColumn(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 8.dp)
+    ) {
+        item(key = "calendar_panel") {
+            TaskCalendarPanel(
+                monthStartEpochDay = state.calendarMonthStartEpochDay,
+                todayEpochDay = state.todayEpochDay,
+                selectedDayKey = state.selectedCalendarDayKey,
+                taskCountByDay = state.taskCountByDay,
+                undatedCount = state.undatedCount,
+                onPreviousMonth = onPreviousMonth,
+                onNextMonth = onNextMonth,
+                onSelectDay = onSelectDay,
+                onSelectUndated = onSelectUndated,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+        if (state.calendarDayTasks.isEmpty()) {
+            item(key = "calendar_empty") {
+                Text(
+                    text = when (state.filter) {
+                        TaskFilter.ALL -> "Нет задач на этот день"
+                        TaskFilter.ACTIVE -> "Нет активных задач"
+                        TaskFilter.DONE -> "Нет выполненных задач"
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 24.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            items(state.calendarDayTasks, key = { it.id }) { task ->
+                val subtasks = state.subtasksByParentId[task.id].orEmpty()
+                ChecklistItemRow(
+                    task = task,
+                    today = state.todayEpochDay,
+                    subtasksEnabled = state.subtasksEnabled,
+                    subtasks = subtasks,
+                    dragState = calendarDragState,
+                    enableDrag = false,
+                    onToggle = { onToggleTask(task) },
+                    onToggleSubtask = onToggleSubtask,
+                    onEdit = { onEditTask(task) }
+                )
+                AnyDoDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun EmptyState(
     filter: TaskFilter,
     modifier: Modifier = Modifier
@@ -506,18 +660,25 @@ private fun ChecklistItemRow(
     subtasksEnabled: Boolean,
     subtasks: List<SubtaskEntity>,
     dragState: TaskDayDragState,
+    enableDrag: Boolean = true,
     onToggle: () -> Unit,
     onToggleSubtask: (SubtaskEntity) -> Unit,
     onEdit: () -> Unit
 ) {
     val extended = MaterialTheme.extendedColors
     val overdue = task.isOverdue(today)
+    val rowInteractionModifier = if (enableDrag) {
+        Modifier
+            .draggingRowAlpha(task, dragState)
+            .taskDragSource(task, dragState, onTap = onEdit)
+    } else {
+        Modifier.clickable(onClick = onEdit)
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .draggingRowAlpha(task, dragState)
-            .taskDragSource(task, dragState, onTap = onEdit)
+            .then(rowInteractionModifier)
             .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.Top
     ) {

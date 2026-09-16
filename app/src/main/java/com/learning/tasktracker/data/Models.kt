@@ -12,6 +12,11 @@ enum class TaskFilter(val label: String) {
     DONE("Готово")
 }
 
+enum class TaskViewMode(val label: String) {
+    LIST("Список"),
+    CALENDAR("Календарь")
+}
+
 enum class RecurrenceType(val label: String) {
     NONE("Не повторять"),
     DAILY("Ежедневно"),

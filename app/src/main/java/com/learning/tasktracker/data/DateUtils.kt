@@ -20,6 +20,8 @@ object DateUtils {
 
     private val weekdayShortLabels = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
+    val calendarWeekdayLabels: List<String> get() = weekdayShortLabels
+
     /** Drop-target / group key for tasks without a due date. */
     const val UNDATED_GROUP_KEY = Long.MIN_VALUE
 
@@ -216,4 +218,40 @@ object DateUtils {
     fun formatRecurrenceEnd(endEpochDay: Long): String = "до ${formatShort(endEpochDay)}"
 
     fun weekdayChipLabel(dayOfWeek: DayOfWeek): String = weekdayShortLabels[dayOfWeek.value - 1]
+
+    fun firstDayOfMonth(epochDay: Long = todayEpochDay()): Long {
+        val date = fromEpochDay(epochDay)
+        return date.withDayOfMonth(1).toEpochDay()
+    }
+
+    fun formatMonthYear(monthStartEpochDay: Long): String {
+        val date = fromEpochDay(monthStartEpochDay)
+        val raw = date.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru")))
+        return raw.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("ru")) else it.toString() }
+    }
+
+    /** Monday-first grid cells; null = padding outside the month. */
+    fun calendarMonthGrid(monthStartEpochDay: Long): List<Long?> {
+        val first = fromEpochDay(monthStartEpochDay)
+        val leading = first.dayOfWeek.value - 1
+        val cells = mutableListOf<Long?>()
+        repeat(leading) { cells.add(null) }
+        for (day in 1..first.lengthOfMonth()) {
+            cells.add(first.withDayOfMonth(day).toEpochDay())
+        }
+        while (cells.size % 7 != 0) {
+            cells.add(null)
+        }
+        return cells
+    }
+
+    fun isSameMonth(epochDay: Long, monthStartEpochDay: Long): Boolean {
+        val date = fromEpochDay(epochDay)
+        val monthStart = fromEpochDay(monthStartEpochDay)
+        return date.year == monthStart.year && date.month == monthStart.month
+    }
+
+    fun shiftMonth(monthStartEpochDay: Long, deltaMonths: Int): Long {
+        return fromEpochDay(monthStartEpochDay).plusMonths(deltaMonths.toLong()).toEpochDay()
+    }
 }
