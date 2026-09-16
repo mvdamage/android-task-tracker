@@ -36,6 +36,9 @@ interface ShoppingDao {
     @Update
     suspend fun update(item: ShoppingItemEntity)
 
+    @Update
+    suspend fun updateCategory(category: ShoppingCategoryEntity)
+
     @Delete
     suspend fun delete(item: ShoppingItemEntity)
 

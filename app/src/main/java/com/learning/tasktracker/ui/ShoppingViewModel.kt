@@ -109,6 +109,18 @@ class ShoppingViewModel(
         viewModelScope.launch { repository.addCategory(name, colorArgb, iconKey) }
     }
 
+    fun updateCategory(
+        category: ShoppingCategoryEntity,
+        name: String,
+        colorArgb: Long,
+        iconKey: String
+    ) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            repository.updateCategory(category, name, colorArgb, iconKey)
+        }
+    }
+
     fun requestDeleteCategory(category: ShoppingCategoryEntity) {
         viewModelScope.launch {
             _pendingDeleteCategory.value = category

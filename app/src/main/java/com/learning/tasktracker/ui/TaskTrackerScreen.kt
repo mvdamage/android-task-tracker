@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -492,7 +493,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
 }
 
 @Composable
-private fun TaskListContent(
+private fun ColumnScope.TaskListContent(
     state: TaskUiState,
     listState: LazyListState,
     dragState: TaskDayDragState,
@@ -552,7 +553,7 @@ private fun TaskListContent(
 }
 
 @Composable
-private fun TaskCalendarContent(
+private fun ColumnScope.TaskCalendarContent(
     state: TaskUiState,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,

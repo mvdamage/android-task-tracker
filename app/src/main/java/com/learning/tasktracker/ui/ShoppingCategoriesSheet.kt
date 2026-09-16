@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -59,15 +60,32 @@ fun ShoppingCategoriesSheet(
     pendingDeleteCategory: ShoppingCategoryEntity?,
     itemsInPendingDeleteCategory: Int,
     onAddCategory: (name: String, colorArgb: Long, iconKey: String) -> Unit,
+    onUpdateCategory: (category: ShoppingCategoryEntity, name: String, colorArgb: Long, iconKey: String) -> Unit,
     onRequestDeleteCategory: (ShoppingCategoryEntity) -> Unit,
     onConfirmDeleteCategory: () -> Unit,
     onDismissDeleteCategory: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var newName by remember { mutableStateOf("") }
+    var editingCategory by remember { mutableStateOf<ShoppingCategoryEntity?>(null) }
+    var formName by remember { mutableStateOf("") }
     var selectedColor by remember { mutableLongStateOf(ShoppingCategoryPresets.defaultColor()) }
     var selectedIconKey by remember { mutableStateOf(ShoppingCategoryPresets.defaultIconKey()) }
+    val isEditing = editingCategory != null
+
+    fun resetForm() {
+        editingCategory = null
+        formName = ""
+        selectedColor = ShoppingCategoryPresets.defaultColor()
+        selectedIconKey = ShoppingCategoryPresets.defaultIconKey()
+    }
+
+    fun startEdit(category: ShoppingCategoryEntity) {
+        editingCategory = category
+        formName = category.name
+        selectedColor = category.colorArgb
+        selectedIconKey = category.iconKey
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -105,6 +123,8 @@ fun ShoppingCategoriesSheet(
                     items(categories, key = { it.id }) { category ->
                         CategoryListRow(
                             category = category,
+                            selected = editingCategory?.id == category.id,
+                            onClick = { startEdit(category) },
                             onDelete = { onRequestDeleteCategory(category) }
                         )
                     }
@@ -117,10 +137,23 @@ fun ShoppingCategoriesSheet(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            EditorSectionTitle(title = "Новая категория")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                EditorSectionTitle(
+                    title = if (isEditing) "Редактирование" else "Новая категория",
+                    modifier = Modifier.weight(1f)
+                )
+                if (isEditing) {
+                    TextButton(onClick = { resetForm() }) {
+                        Text("Отмена")
+                    }
+                }
+            }
             OutlinedTextField(
-                value = newName,
-                onValueChange = { newName = it },
+                value = formName,
+                onValueChange = { formName = it },
                 placeholder = { Text("Название") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -162,17 +195,27 @@ fun ShoppingCategoriesSheet(
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = {
-                    if (newName.isNotBlank()) {
-                        onAddCategory(newName, selectedColor, selectedIconKey)
-                        newName = ""
+                    if (formName.isBlank()) return@Button
+                    val current = editingCategory
+                    if (current != null) {
+                        onUpdateCategory(current, formName, selectedColor, selectedIconKey)
+                    } else {
+                        onAddCategory(formName, selectedColor, selectedIconKey)
                     }
+                    resetForm()
                 },
-                enabled = newName.isNotBlank(),
+                enabled = formName.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text("Добавить категорию", modifier = Modifier.padding(start = 8.dp))
+                Icon(
+                    if (isEditing) Icons.Filled.Check else Icons.Filled.Add,
+                    contentDescription = null
+                )
+                Text(
+                    text = if (isEditing) "Сохранить" else "Добавить категорию",
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
         }
     }
@@ -207,14 +250,22 @@ fun ShoppingCategoriesSheet(
 @Composable
 private fun CategoryListRow(
     category: ShoppingCategoryEntity,
+    selected: Boolean,
+    onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val color = ShoppingCategoryPresets.colorFromArgb(category.colorArgb)
+    val background = if (selected) {
+        color.copy(alpha = 0.16f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .background(background)
+            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -235,6 +286,7 @@ private fun CategoryListRow(
         Text(
             text = category.name,
             style = MaterialTheme.typography.bodyLarge,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 12.dp)

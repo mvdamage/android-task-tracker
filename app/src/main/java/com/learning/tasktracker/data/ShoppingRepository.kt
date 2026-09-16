@@ -61,6 +61,23 @@ class ShoppingRepository(private val dao: ShoppingDao) {
         )
     }
 
+    suspend fun updateCategory(
+        category: ShoppingCategoryEntity,
+        name: String,
+        colorArgb: Long,
+        iconKey: String
+    ) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        dao.updateCategory(
+            category.copy(
+                name = trimmed,
+                colorArgb = colorArgb,
+                iconKey = iconKey
+            )
+        )
+    }
+
     suspend fun deleteCategory(category: ShoppingCategoryEntity) {
         dao.clearCategoryFromItems(category.id)
         dao.deleteCategory(category)

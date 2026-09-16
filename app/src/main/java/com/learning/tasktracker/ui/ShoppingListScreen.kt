@@ -375,6 +375,7 @@ fun ShoppingListScreen(viewModel: ShoppingViewModel) {
             pendingDeleteCategory = pendingDeleteCategory,
             itemsInPendingDeleteCategory = deleteCategoryItemCount,
             onAddCategory = viewModel::addCategory,
+            onUpdateCategory = viewModel::updateCategory,
             onRequestDeleteCategory = viewModel::requestDeleteCategory,
             onConfirmDeleteCategory = viewModel::confirmDeleteCategory,
             onDismissDeleteCategory = viewModel::dismissDeleteCategory,
