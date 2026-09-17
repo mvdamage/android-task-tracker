@@ -20,6 +20,8 @@ import com.learning.tasktracker.data.TaskKind
 import com.learning.tasktracker.data.TaskRepository
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class TaskGroup(
     val dueDateEpochDay: Long?,
@@ -56,6 +58,7 @@ class TaskViewModel(
     private val calendarMonthStart = MutableStateFlow(DateUtils.firstDayOfMonth())
     private val selectedCalendarDayKey = MutableStateFlow(DateUtils.todayEpochDay())
     private val todayTick = MutableStateFlow(DateUtils.todayEpochDay())
+    private val toggleDoneMutex = Mutex()
 
     val titleHistory: StateFlow<List<String>> = repository.observeTasks()
         .map { tasks ->
@@ -257,7 +260,11 @@ class TaskViewModel(
     }
 
     fun toggleDone(task: TaskEntity) {
-        viewModelScope.launch { repository.toggleDone(task) }
+        viewModelScope.launch {
+            toggleDoneMutex.withLock {
+                repository.toggleDone(task)
+            }
+        }
     }
 
     fun delete(task: TaskEntity) {

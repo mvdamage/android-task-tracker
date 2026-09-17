@@ -96,6 +96,8 @@ class TaskRepository(
     suspend fun moveToDay(task: TaskEntity, targetEpochDay: Long?) {
         if (task.dueDateEpochDay == targetEpochDay) return
         if (targetEpochDay == null) {
+            // Calendar items must keep a date (and birthdays keep yearly recurrence).
+            if (task.kind == TaskKind.EVENT || task.kind == TaskKind.BIRTHDAY) return
             dao.update(
                 task.copy(
                     dueDateEpochDay = null,
@@ -123,19 +125,27 @@ class TaskRepository(
     }
 
     suspend fun toggleDone(task: TaskEntity) {
+        val current = dao.getById(task.id) ?: return
         val now = System.currentTimeMillis()
-        val due = task.dueDateEpochDay
-        if (!task.isDone && task.isRecurring && due != null) {
+        val due = current.dueDateEpochDay
+
+        // Birthdays: mark done/undone only — never spawn a duplicate next year.
+        if (current.kind == TaskKind.BIRTHDAY) {
+            dao.update(current.copy(isDone = !current.isDone, updatedAt = now))
+            return
+        }
+
+        if (!current.isDone && current.isRecurring && due != null) {
             val next = DateUtils.nextDueDate(
                 due,
-                task.recurrenceType,
-                task.recurrenceInterval,
-                task.recurrenceWeekdayMask,
-                task.recurrenceEndEpochDay
+                current.recurrenceType,
+                current.recurrenceInterval,
+                current.recurrenceWeekdayMask,
+                current.recurrenceEndEpochDay
             )
             if (next != null) {
-                val completed = task.copy(isDone = true, updatedAt = now)
-                val spawned = task.copy(
+                val completed = current.copy(isDone = true, updatedAt = now)
+                val spawned = current.copy(
                     id = 0,
                     isDone = false,
                     dueDateEpochDay = next,
@@ -143,7 +153,7 @@ class TaskRepository(
                     updatedAt = now
                 )
                 val newTaskId = dao.completeRecurringOccurrence(completed, spawned)
-                subtaskDao.listForParent(task.id).forEach { subtask ->
+                subtaskDao.listForParent(current.id).forEach { subtask ->
                     subtaskDao.insert(
                         subtask.copy(
                             id = 0,
@@ -156,10 +166,10 @@ class TaskRepository(
                 }
                 return
             }
-            dao.update(task.copy(isDone = true, updatedAt = now))
+            dao.update(current.copy(isDone = true, updatedAt = now))
             return
         }
-        dao.update(task.copy(isDone = !task.isDone, updatedAt = now))
+        dao.update(current.copy(isDone = !current.isDone, updatedAt = now))
     }
 
     suspend fun delete(task: TaskEntity) {
@@ -200,7 +210,26 @@ class TaskRepository(
             return
         }
         if (last < today) {
+            // Completed past birthdays → next year (keep the reminder, no catch-up while active).
+            dao.getCompletedPastBirthdays(today).forEach { birthday ->
+                val due = birthday.dueDateEpochDay ?: return@forEach
+                val next = DateUtils.nextDueDate(
+                    currentDue = due,
+                    type = RecurrenceType.YEARLY,
+                    interval = birthday.recurrenceInterval.coerceAtLeast(1),
+                    weekdayMask = 0,
+                    endEpochDay = null
+                ) ?: return@forEach
+                dao.update(
+                    birthday.copy(
+                        dueDateEpochDay = next,
+                        isDone = false,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
             dao.deleteCompleted()
+            // Birthdays are excluded from overdue catch-up so the anniversary stays on its day.
             dao.getOverdueRecurring(today).forEach { task ->
                 val end = task.recurrenceEndEpochDay
                 if (end != null && today > end) {

@@ -46,13 +46,26 @@ interface TaskDao {
     @Delete
     suspend fun delete(task: TaskEntity)
 
-    @Query("DELETE FROM tasks WHERE isDone = 1")
+    @Query("SELECT * FROM tasks WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): TaskEntity?
+
+    @Query("DELETE FROM tasks WHERE isDone = 1 AND kind != 'BIRTHDAY'")
     suspend fun deleteCompleted()
 
     @Query(
         """
         SELECT * FROM tasks
+        WHERE kind = 'BIRTHDAY' AND isDone = 1
+            AND dueDateEpochDay IS NOT NULL AND dueDateEpochDay < :today
+        """
+    )
+    suspend fun getCompletedPastBirthdays(today: Long): List<TaskEntity>
+
+    @Query(
+        """
+        SELECT * FROM tasks
         WHERE recurrenceType != 'NONE' AND isDone = 0
+            AND kind != 'BIRTHDAY'
             AND dueDateEpochDay IS NOT NULL AND dueDateEpochDay < :today
         """
     )

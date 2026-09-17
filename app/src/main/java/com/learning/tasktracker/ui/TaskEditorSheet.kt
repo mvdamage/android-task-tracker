@@ -191,7 +191,8 @@ internal fun TaskEditorSheet(
     val dateRequired = kind != TaskKind.TASK
     val recurrenceValid = recurrenceType == RecurrenceType.NONE || dueDateEpochDay != null
     val dateValid = !dateRequired || dueDateEpochDay != null
-    val endDateValid = dueDateEpochDay == null ||
+    val endDateValid = kind == TaskKind.BIRTHDAY ||
+        dueDateEpochDay == null ||
         recurrenceEndEpochDay == null ||
         recurrenceEndEpochDay!! >= dueDateEpochDay!!
     val canSave = title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid && dateValid
@@ -217,6 +218,7 @@ internal fun TaskEditorSheet(
     val timeEnabled = dueDateEpochDay != null && kind != TaskKind.BIRTHDAY
     val showPriority = kind == TaskKind.TASK
     val showRecurrenceEditor = kind != TaskKind.BIRTHDAY
+    val showRecurrenceEnd = kind != TaskKind.BIRTHDAY && recurrenceType != RecurrenceType.NONE
     val showSubtasks = kind == TaskKind.TASK && subtasksEnabled && state is EditorState.Edit
     val recurrenceLabel = when (kind) {
         TaskKind.BIRTHDAY -> "Каждый год"
@@ -560,7 +562,7 @@ internal fun TaskEditorSheet(
                 }
             }
 
-            if (recurrenceType != RecurrenceType.NONE) {
+            if (showRecurrenceEnd) {
                 HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
                 EditorOptionRow(
                     label = "Повторять до",
