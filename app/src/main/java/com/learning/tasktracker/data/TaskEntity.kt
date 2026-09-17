@@ -9,6 +9,7 @@ data class TaskEntity(
     val title: String,
     val notes: String = "",
     val priority: Priority = Priority.MEDIUM,
+    val kind: TaskKind = TaskKind.TASK,
     val isDone: Boolean = false,
     /** Calendar day of the task (LocalDate.toEpochDay); null = no due date. */
     val dueDateEpochDay: Long? = null,
@@ -26,7 +27,10 @@ data class TaskEntity(
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     fun isOverdue(today: Long = DateUtils.todayEpochDay()): Boolean =
-        DateUtils.isOverdue(dueDateEpochDay, dueTimeMinutes, dueTimeEndMinutes, isDone, today)
+        kind == TaskKind.TASK &&
+            DateUtils.isOverdue(dueDateEpochDay, dueTimeMinutes, dueTimeEndMinutes, isDone, today)
 
     val isRecurring: Boolean get() = recurrenceType != RecurrenceType.NONE
+
+    val isCalendarItem: Boolean get() = kind != TaskKind.TASK
 }

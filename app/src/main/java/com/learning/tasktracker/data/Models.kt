@@ -6,6 +6,12 @@ enum class Priority(val label: String) {
     HIGH("Высокий")
 }
 
+enum class TaskKind(val label: String) {
+    TASK("Задача"),
+    EVENT("Событие"),
+    BIRTHDAY("День рождения")
+}
+
 enum class TaskFilter(val label: String) {
     ALL("Все"),
     ACTIVE("Активные"),

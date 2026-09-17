@@ -17,13 +17,19 @@ class Converters {
     fun toPriority(value: String): Priority = Priority.valueOf(value)
 
     @TypeConverter
+    fun fromTaskKind(value: TaskKind): String = value.name
+
+    @TypeConverter
+    fun toTaskKind(value: String): TaskKind = TaskKind.valueOf(value)
+
+    @TypeConverter
     fun fromRecurrenceType(value: RecurrenceType): String = value.name
 
     @TypeConverter
     fun toRecurrenceType(value: String): RecurrenceType = RecurrenceType.valueOf(value)
 }
 
-@Database(entities = [TaskEntity::class, ShoppingItemEntity::class, ShoppingCategoryEntity::class, SubtaskEntity::class], version = 10, exportSchema = false)
+@Database(entities = [TaskEntity::class, ShoppingItemEntity::class, ShoppingCategoryEntity::class, SubtaskEntity::class], version = 11, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
@@ -165,6 +171,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'TASK'"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -177,7 +191,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_6_7,
             MIGRATION_7_8,
             MIGRATION_8_9,
-            MIGRATION_9_10
+            MIGRATION_9_10,
+            MIGRATION_10_11
         )
 
         fun get(context: Context): AppDatabase {

@@ -73,6 +73,7 @@ import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SubtaskEntity
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
+import com.learning.tasktracker.data.TaskKind
 import com.learning.tasktracker.data.TaskViewMode
 import com.learning.tasktracker.ui.components.AnyDoDivider
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
@@ -98,6 +99,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.ZoneId
+import androidx.compose.material.icons.outlined.Cake
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.size
 
 private val TaskVoiceParseResultSaver = Saver<TaskVoiceParseResult?, List<Any?>>(
     save = { result ->
@@ -152,6 +159,17 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     val extended = MaterialTheme.extendedColors
     var rootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val currentRootCoordinates by rememberUpdatedState(rootCoordinates)
+
+    fun openCreate(kind: TaskKind = TaskKind.TASK) {
+        val selected = state.selectedCalendarDayKey
+        val due = when {
+            state.viewMode != TaskViewMode.CALENDAR -> DateUtils.todayEpochDay()
+            selected == DateUtils.UNDATED_GROUP_KEY ->
+                if (kind == TaskKind.TASK) null else DateUtils.todayEpochDay()
+            else -> selected
+        }
+        editor = EditorState.Create(dueDateEpochDay = due, kind = kind)
+    }
 
     LaunchedEffect(dragState.isDragging) {
         if (!dragState.isDragging) return@LaunchedEffect
@@ -271,7 +289,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
         },
         floatingActionButton = {
             VoiceCaptureFabColumn(
-                onPrimaryClick = { editor = EditorState.Create },
+                onPrimaryClick = { openCreate(TaskKind.TASK) },
                 primaryContentDescription = "Новая задача",
                 onMicClick = voiceSession.onMicClick
             )
@@ -317,8 +335,12 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 QuickAddBar(
-                    placeholder = "Добавить задачу…",
-                    onClick = { editor = EditorState.Create },
+                    placeholder = if (state.viewMode == TaskViewMode.CALENDAR) {
+                        "Добавить на выбранный день…"
+                    } else {
+                        "Добавить задачу…"
+                    },
+                    onClick = { openCreate(TaskKind.TASK) },
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     testTag = TestTags.QUICK_ADD_TASK
                 )
@@ -371,6 +393,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         onNextMonth = { viewModel.shiftCalendarMonth(1) },
                         onSelectDay = viewModel::selectCalendarDay,
                         onSelectUndated = viewModel::selectUndatedCalendarBucket,
+                        onCreate = ::openCreate,
                         onEditTask = { editor = EditorState.Edit(it) },
                         onToggleTask = viewModel::toggleDone,
                         onToggleSubtask = viewModel::toggleSubtask
@@ -404,27 +427,29 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             onSave = { result ->
                 when (current) {
                     is EditorState.Create -> viewModel.addTask(
-                        result.title,
-                        result.notes,
-                        result.priority,
-                        result.dueDateEpochDay,
-                        result.recurrenceType,
-                        result.recurrenceWeekdayMask,
-                        result.recurrenceEndEpochDay,
-                        result.dueTimeMinutes,
-                        result.dueTimeEndMinutes
+                        title = result.title,
+                        notes = result.notes,
+                        priority = result.priority,
+                        kind = result.kind,
+                        dueDateEpochDay = result.dueDateEpochDay,
+                        recurrenceType = result.recurrenceType,
+                        recurrenceWeekdayMask = result.recurrenceWeekdayMask,
+                        recurrenceEndEpochDay = result.recurrenceEndEpochDay,
+                        dueTimeMinutes = result.dueTimeMinutes,
+                        dueTimeEndMinutes = result.dueTimeEndMinutes
                     )
                     is EditorState.Edit -> viewModel.updateTask(
-                        current.task,
-                        result.title,
-                        result.notes,
-                        result.priority,
-                        result.dueDateEpochDay,
-                        result.recurrenceType,
-                        result.recurrenceWeekdayMask,
-                        result.recurrenceEndEpochDay,
-                        result.dueTimeMinutes,
-                        result.dueTimeEndMinutes
+                        task = current.task,
+                        title = result.title,
+                        notes = result.notes,
+                        priority = result.priority,
+                        kind = result.kind,
+                        dueDateEpochDay = result.dueDateEpochDay,
+                        recurrenceType = result.recurrenceType,
+                        recurrenceWeekdayMask = result.recurrenceWeekdayMask,
+                        recurrenceEndEpochDay = result.recurrenceEndEpochDay,
+                        dueTimeMinutes = result.dueTimeMinutes,
+                        dueTimeEndMinutes = result.dueTimeEndMinutes
                     )
                 }
                 editor = null
@@ -443,6 +468,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     title = result.title,
                     notes = "",
                     priority = Priority.MEDIUM,
+                    kind = TaskKind.TASK,
                     dueDateEpochDay = result.dueDateEpochDay,
                     recurrenceType = RecurrenceType.NONE,
                     recurrenceWeekdayMask = 0,
@@ -552,6 +578,7 @@ private fun ColumnScope.TaskListContent(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ColumnScope.TaskCalendarContent(
     state: TaskUiState,
@@ -559,6 +586,7 @@ private fun ColumnScope.TaskCalendarContent(
     onNextMonth: () -> Unit,
     onSelectDay: (Long) -> Unit,
     onSelectUndated: () -> Unit,
+    onCreate: (TaskKind) -> Unit,
     onEditTask: (TaskEntity) -> Unit,
     onToggleTask: (TaskEntity) -> Unit,
     onToggleSubtask: (SubtaskEntity) -> Unit
@@ -584,13 +612,52 @@ private fun ColumnScope.TaskCalendarContent(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
+        item(key = "calendar_add_actions") {
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = false,
+                    onClick = { onCreate(TaskKind.TASK) },
+                    label = { Text("Задача") }
+                )
+                FilterChip(
+                    selected = false,
+                    onClick = { onCreate(TaskKind.EVENT) },
+                    label = { Text("Событие") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Event,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+                FilterChip(
+                    selected = false,
+                    onClick = { onCreate(TaskKind.BIRTHDAY) },
+                    label = { Text("День рождения") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Cake,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+            }
+        }
         if (state.calendarDayTasks.isEmpty()) {
             item(key = "calendar_empty") {
                 Text(
                     text = when (state.filter) {
-                        TaskFilter.ALL -> "Нет задач на этот день"
-                        TaskFilter.ACTIVE -> "Нет активных задач"
-                        TaskFilter.DONE -> "Нет выполненных задач"
+                        TaskFilter.ALL -> "Нет записей на этот день"
+                        TaskFilter.ACTIVE -> "Нет активных записей"
+                        TaskFilter.DONE -> "Нет выполненных записей"
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -698,7 +765,21 @@ private fun ChecklistItemRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                PriorityDot(priority = task.priority)
+                when (task.kind) {
+                    TaskKind.TASK -> PriorityDot(priority = task.priority)
+                    TaskKind.EVENT -> Icon(
+                        Icons.Outlined.Event,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    TaskKind.BIRTHDAY -> Icon(
+                        Icons.Outlined.Cake,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
                 TaskListTitle(
                     text = task.title,
                     done = task.isDone,
@@ -720,7 +801,7 @@ private fun ChecklistItemRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (subtasksEnabled && subtasks.isNotEmpty()) {
+            if (task.kind == TaskKind.TASK && subtasksEnabled && subtasks.isNotEmpty()) {
                 subtasks.forEach { subtask ->
                     SubtaskRow(
                         subtask = subtask,
@@ -739,17 +820,20 @@ private fun buildTaskSubtitle(
     subtasks: List<SubtaskEntity>
 ): String {
     val parts = mutableListOf<String>()
+    if (task.kind != TaskKind.TASK) {
+        parts += task.kind.label
+    }
     if (task.dueTimeMinutes != null) {
         parts += DateUtils.formatTaskTime(task.dueTimeMinutes, task.dueTimeEndMinutes).orEmpty()
     }
-    if (task.priority != Priority.MEDIUM) {
+    if (task.kind == TaskKind.TASK && task.priority != Priority.MEDIUM) {
         parts += task.priority.label
     }
     if (task.isRecurring) {
         parts += DateUtils.recurrenceLabel(task.recurrenceType, task.recurrenceWeekdayMask)
         task.recurrenceEndEpochDay?.let { parts += DateUtils.formatRecurrenceEnd(it) }
     }
-    if (subtasksEnabled && subtasks.isNotEmpty()) {
+    if (task.kind == TaskKind.TASK && subtasksEnabled && subtasks.isNotEmpty()) {
         val doneCount = subtasks.count { it.isDone }
         parts += "$doneCount/${subtasks.size}"
     }

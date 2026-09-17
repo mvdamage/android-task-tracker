@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import com.learning.tasktracker.data.TaskKind
 import com.learning.tasktracker.data.TaskRepository
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -203,7 +204,8 @@ class TaskViewModel(
         recurrenceWeekdayMask: Int,
         recurrenceEndEpochDay: Long?,
         dueTimeMinutes: Int?,
-        dueTimeEndMinutes: Int?
+        dueTimeEndMinutes: Int?,
+        kind: TaskKind = TaskKind.TASK
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -211,6 +213,7 @@ class TaskViewModel(
                 title = title,
                 notes = notes,
                 priority = priority,
+                kind = kind,
                 dueDateEpochDay = dueDateEpochDay,
                 recurrenceType = recurrenceType,
                 recurrenceWeekdayMask = recurrenceWeekdayMask,
@@ -231,7 +234,8 @@ class TaskViewModel(
         recurrenceWeekdayMask: Int,
         recurrenceEndEpochDay: Long?,
         dueTimeMinutes: Int?,
-        dueTimeEndMinutes: Int?
+        dueTimeEndMinutes: Int?,
+        kind: TaskKind = task.kind
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -240,6 +244,7 @@ class TaskViewModel(
                     title = title.trim(),
                     notes = notes.trim(),
                     priority = priority,
+                    kind = kind,
                     dueDateEpochDay = dueDateEpochDay,
                     recurrenceType = recurrenceType,
                     recurrenceWeekdayMask = recurrenceWeekdayMask,

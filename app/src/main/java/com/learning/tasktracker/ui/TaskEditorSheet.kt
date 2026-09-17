@@ -55,6 +55,7 @@ import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SubtaskEntity
 import com.learning.tasktracker.data.TaskEntity
+import com.learning.tasktracker.data.TaskKind
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.components.EditorOptionRow
 import com.learning.tasktracker.ui.components.EditorSectionTitle
@@ -66,7 +67,11 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 internal sealed interface EditorState {
-    data object Create : EditorState
+    data class Create(
+        val dueDateEpochDay: Long? = DateUtils.todayEpochDay(),
+        val kind: TaskKind = TaskKind.TASK
+    ) : EditorState
+
     data class Edit(val task: TaskEntity) : EditorState
 }
 
@@ -74,6 +79,7 @@ internal data class TaskEditorResult(
     val title: String,
     val notes: String,
     val priority: Priority,
+    val kind: TaskKind,
     val dueDateEpochDay: Long?,
     val recurrenceType: RecurrenceType,
     val recurrenceWeekdayMask: Int,
@@ -103,28 +109,42 @@ internal fun TaskEditorSheet(
     var title by remember(state) { mutableStateOf(existing?.title.orEmpty()) }
     var notes by remember(state) { mutableStateOf(existing?.notes.orEmpty()) }
     var priority by remember(state) { mutableStateOf(existing?.priority ?: Priority.MEDIUM) }
+    var kind by remember(state) {
+        mutableStateOf(
+            when (state) {
+                is EditorState.Edit -> state.task.kind
+                is EditorState.Create -> state.kind
+            }
+        )
+    }
     var dueDateEpochDay by remember(state) {
         mutableStateOf(
             when (state) {
                 is EditorState.Edit -> state.task.dueDateEpochDay
-                EditorState.Create -> DateUtils.todayEpochDay()
+                is EditorState.Create -> state.dueDateEpochDay
             }
         )
     }
     var recurrenceType by remember(state) {
-        mutableStateOf(existing?.recurrenceType ?: RecurrenceType.NONE)
+        mutableStateOf(
+            when {
+                existing != null -> existing.recurrenceType
+                kind == TaskKind.BIRTHDAY -> RecurrenceType.YEARLY
+                else -> RecurrenceType.NONE
+            }
+        )
     }
     var recurrenceWeekdayMask by remember(state) {
         mutableIntStateOf(existing?.recurrenceWeekdayMask ?: 0)
     }
     var dueTimeMinutes by remember(state) {
-        mutableStateOf(existing?.dueTimeMinutes)
+        mutableStateOf(if (kind == TaskKind.BIRTHDAY) null else existing?.dueTimeMinutes)
     }
     var dueTimeEndMinutes by remember(state) {
-        mutableStateOf(existing?.dueTimeEndMinutes)
+        mutableStateOf(if (kind == TaskKind.BIRTHDAY) null else existing?.dueTimeEndMinutes)
     }
     var periodMode by remember(state) {
-        mutableStateOf(existing?.dueTimeEndMinutes != null)
+        mutableStateOf(existing?.dueTimeEndMinutes != null && kind != TaskKind.BIRTHDAY)
     }
     var recurrenceEndEpochDay by remember(state) {
         mutableStateOf(existing?.recurrenceEndEpochDay)
@@ -136,14 +156,45 @@ internal fun TaskEditorSheet(
     var showAdvanced by remember { mutableStateOf(false) }
     var newSubtaskTitle by remember(state) { mutableStateOf("") }
 
+    fun applyKind(next: TaskKind) {
+        kind = next
+        when (next) {
+            TaskKind.BIRTHDAY -> {
+                if (dueDateEpochDay == null) {
+                    dueDateEpochDay = DateUtils.todayEpochDay()
+                }
+                recurrenceType = RecurrenceType.YEARLY
+                recurrenceWeekdayMask = 0
+                recurrenceEndEpochDay = null
+                dueTimeMinutes = null
+                dueTimeEndMinutes = null
+                periodMode = false
+                priority = Priority.MEDIUM
+            }
+            TaskKind.EVENT -> {
+                if (dueDateEpochDay == null) {
+                    dueDateEpochDay = DateUtils.todayEpochDay()
+                }
+                priority = Priority.MEDIUM
+                if (recurrenceType == RecurrenceType.YEARLY && existing?.kind == TaskKind.BIRTHDAY) {
+                    recurrenceType = RecurrenceType.NONE
+                }
+            }
+            TaskKind.TASK -> Unit
+        }
+    }
+
     val titleSuggestions = remember(title, titleHistory) {
         TaskViewModel.filterTitleSuggestions(titleHistory, title)
     }
     val customDaysValid = recurrenceType != RecurrenceType.CUSTOM_DAYS || recurrenceWeekdayMask != 0
+    val dateRequired = kind != TaskKind.TASK
     val recurrenceValid = recurrenceType == RecurrenceType.NONE || dueDateEpochDay != null
+    val dateValid = !dateRequired || dueDateEpochDay != null
     val endDateValid = dueDateEpochDay == null ||
         recurrenceEndEpochDay == null ||
         recurrenceEndEpochDay!! >= dueDateEpochDay!!
+    val canSave = title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid && dateValid
 
     val dateLabel = dueDateEpochDay?.let { day ->
         val today = DateUtils.todayEpochDay()
@@ -163,13 +214,24 @@ internal fun TaskEditorSheet(
     }
     val startTimeLabel = dueTimeMinutes?.let { DateUtils.formatTime(it) } ?: "Не задано"
     val endTimeLabel = dueTimeEndMinutes?.let { DateUtils.formatTime(it) } ?: "Не задано"
-    val timeEnabled = dueDateEpochDay != null
-    val recurrenceLabel = if (recurrenceType == RecurrenceType.NONE) {
-        "Не повторяется"
-    } else {
-        DateUtils.recurrenceLabel(recurrenceType, recurrenceWeekdayMask)
+    val timeEnabled = dueDateEpochDay != null && kind != TaskKind.BIRTHDAY
+    val showPriority = kind == TaskKind.TASK
+    val showRecurrenceEditor = kind != TaskKind.BIRTHDAY
+    val showSubtasks = kind == TaskKind.TASK && subtasksEnabled && state is EditorState.Edit
+    val recurrenceLabel = when (kind) {
+        TaskKind.BIRTHDAY -> "Каждый год"
+        else -> if (recurrenceType == RecurrenceType.NONE) {
+            "Не повторяется"
+        } else {
+            DateUtils.recurrenceLabel(recurrenceType, recurrenceWeekdayMask)
+        }
     }
     val endDateLabel = recurrenceEndEpochDay?.let { DateUtils.formatShort(it) } ?: "Без ограничения"
+    val titlePlaceholder = when (kind) {
+        TaskKind.TASK -> "Название задачи"
+        TaskKind.EVENT -> "Название события"
+        TaskKind.BIRTHDAY -> "Кто отмечает"
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -193,27 +255,38 @@ internal fun TaskEditorSheet(
                 TextButton(onClick = onDismiss) { Text("Отмена") }
                 TextButton(
                     onClick = {
-                        if (title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid) {
+                        if (canSave) {
                             val (startTime, endTime) = DateUtils.normalizedTimePeriod(
-                                if (dueDateEpochDay == null) null else dueTimeMinutes,
-                                if (dueDateEpochDay == null || !periodMode) null else dueTimeEndMinutes
+                                if (dueDateEpochDay == null || kind == TaskKind.BIRTHDAY) null else dueTimeMinutes,
+                                if (dueDateEpochDay == null || !periodMode || kind == TaskKind.BIRTHDAY) {
+                                    null
+                                } else {
+                                    dueTimeEndMinutes
+                                }
                             )
                             onSave(
                                 TaskEditorResult(
                                     title = title,
                                     notes = notes,
-                                    priority = priority,
+                                    priority = if (kind == TaskKind.TASK) priority else Priority.MEDIUM,
+                                    kind = kind,
                                     dueDateEpochDay = dueDateEpochDay,
-                                    recurrenceType = recurrenceType,
-                                    recurrenceWeekdayMask = if (recurrenceType == RecurrenceType.CUSTOM_DAYS) {
+                                    recurrenceType = if (kind == TaskKind.BIRTHDAY) {
+                                        RecurrenceType.YEARLY
+                                    } else {
+                                        recurrenceType
+                                    },
+                                    recurrenceWeekdayMask = if (kind == TaskKind.BIRTHDAY) {
+                                        0
+                                    } else if (recurrenceType == RecurrenceType.CUSTOM_DAYS) {
                                         recurrenceWeekdayMask
                                     } else {
                                         0
                                     },
-                                    recurrenceEndEpochDay = if (recurrenceType == RecurrenceType.NONE) {
-                                        null
-                                    } else {
-                                        recurrenceEndEpochDay
+                                    recurrenceEndEpochDay = when {
+                                        kind == TaskKind.BIRTHDAY -> null
+                                        recurrenceType == RecurrenceType.NONE -> null
+                                        else -> recurrenceEndEpochDay
                                     },
                                     dueTimeMinutes = startTime,
                                     dueTimeEndMinutes = endTime
@@ -221,12 +294,12 @@ internal fun TaskEditorSheet(
                             )
                         }
                     },
-                    enabled = title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid,
+                    enabled = canSave,
                     modifier = Modifier.testTag(TestTags.TASK_EDITOR_DONE)
                 ) {
                     Text(
                         "Готово",
-                        color = if (title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid) {
+                        color = if (canSave) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -235,10 +308,25 @@ internal fun TaskEditorSheet(
                 }
             }
 
+            EditorSectionTitle(title = "Тип")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TaskKind.entries.forEach { value ->
+                    FilterChip(
+                        selected = kind == value,
+                        onClick = { applyKind(value) },
+                        label = { Text(value.label) }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                placeholder = { Text("Название задачи") },
+                placeholder = { Text(titlePlaceholder) },
                 singleLine = false,
                 minLines = 1,
                 maxLines = 3,
@@ -252,7 +340,7 @@ internal fun TaskEditorSheet(
                     unfocusedIndicatorColor = MaterialTheme.extendedColors.divider
                 )
             )
-            if (titleSuggestions.isNotEmpty()) {
+            if (titleSuggestions.isNotEmpty() && kind == TaskKind.TASK) {
                 Spacer(modifier = Modifier.height(8.dp))
                 HorizontalSuggestionPills(
                     suggestions = titleSuggestions,
@@ -389,32 +477,43 @@ internal fun TaskEditorSheet(
             }
             HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
 
-            Column(modifier = Modifier.padding(vertical = 12.dp)) {
-                Text(
-                    text = "Приоритет",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Priority.entries.forEach { value ->
-                        PriorityChip(
-                            priority = value,
-                            selected = priority == value,
-                            onClick = { priority = value }
-                        )
+            if (showPriority) {
+                Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                    Text(
+                        text = "Приоритет",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Priority.entries.forEach { value ->
+                            PriorityChip(
+                                priority = value,
+                                selected = priority == value,
+                                onClick = { priority = value }
+                            )
+                        }
                     }
                 }
+                HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
             }
-            HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
 
-            EditorOptionRow(
-                label = "Повторение",
-                value = recurrenceLabel,
-                onClick = { showAdvanced = !showAdvanced }
-            )
+            if (showRecurrenceEditor) {
+                EditorOptionRow(
+                    label = "Повторение",
+                    value = recurrenceLabel,
+                    onClick = { showAdvanced = !showAdvanced }
+                )
+            } else {
+                EditorOptionRow(
+                    label = "Повторение",
+                    value = recurrenceLabel,
+                    enabled = false,
+                    onClick = {}
+                )
+            }
 
-            if (showAdvanced) {
+            if (showAdvanced && showRecurrenceEditor) {
                 Spacer(modifier = Modifier.height(8.dp))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -494,7 +593,7 @@ internal fun TaskEditorSheet(
                 )
             )
 
-            if (subtasksEnabled && existing != null) {
+            if (showSubtasks) {
                 Spacer(modifier = Modifier.height(16.dp))
                 EditorSectionTitle("Подзадачи")
                 subtasks.forEach { subtask ->
@@ -591,18 +690,20 @@ internal fun TaskEditorSheet(
             },
             dismissButton = {
                 Row {
-                    TextButton(
-                        onClick = {
-                            dueDateEpochDay = null
-                            dueTimeMinutes = null
-                            dueTimeEndMinutes = null
-                            periodMode = false
-                            recurrenceType = RecurrenceType.NONE
-                            recurrenceWeekdayMask = 0
-                            recurrenceEndEpochDay = null
-                            showDatePicker = false
-                        }
-                    ) { Text("Без даты") }
+                    if (kind == TaskKind.TASK) {
+                        TextButton(
+                            onClick = {
+                                dueDateEpochDay = null
+                                dueTimeMinutes = null
+                                dueTimeEndMinutes = null
+                                periodMode = false
+                                recurrenceType = RecurrenceType.NONE
+                                recurrenceWeekdayMask = 0
+                                recurrenceEndEpochDay = null
+                                showDatePicker = false
+                            }
+                        ) { Text("Без даты") }
+                    }
                     TextButton(onClick = { showDatePicker = false }) { Text("Отмена") }
                 }
             }

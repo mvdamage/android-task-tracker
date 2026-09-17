@@ -20,23 +20,38 @@ class TaskRepository(
         recurrenceWeekdayMask: Int = 0,
         recurrenceEndEpochDay: Long? = null,
         dueTimeMinutes: Int? = null,
-        dueTimeEndMinutes: Int? = null
+        dueTimeEndMinutes: Int? = null,
+        kind: TaskKind = TaskKind.TASK
     ) {
-        val alignedDue = DateUtils.alignDueDate(
-            dueDateEpochDay,
-            recurrenceType,
-            recurrenceWeekdayMask
+        val normalized = TaskKindRules.normalize(
+            kind = kind,
+            priority = priority,
+            dueDateEpochDay = dueDateEpochDay,
+            recurrenceType = recurrenceType,
+            recurrenceWeekdayMask = recurrenceWeekdayMask,
+            recurrenceEndEpochDay = recurrenceEndEpochDay,
+            dueTimeMinutes = dueTimeMinutes,
+            dueTimeEndMinutes = dueTimeEndMinutes
         )
-        val (startTime, endTime) = DateUtils.normalizedTimePeriod(dueTimeMinutes, dueTimeEndMinutes)
+        val alignedDue = DateUtils.alignDueDate(
+            normalized.dueDateEpochDay,
+            normalized.recurrenceType,
+            normalized.recurrenceWeekdayMask
+        )
+        val (startTime, endTime) = DateUtils.normalizedTimePeriod(
+            normalized.dueTimeMinutes,
+            normalized.dueTimeEndMinutes
+        )
         dao.insert(
             TaskEntity(
                 title = title.trim(),
                 notes = notes.trim(),
-                priority = priority,
+                priority = normalized.priority,
+                kind = normalized.kind,
                 dueDateEpochDay = alignedDue,
-                recurrenceType = recurrenceType,
-                recurrenceWeekdayMask = recurrenceWeekdayMask,
-                recurrenceEndEpochDay = recurrenceEndEpochDay,
+                recurrenceType = normalized.recurrenceType,
+                recurrenceWeekdayMask = normalized.recurrenceWeekdayMask,
+                recurrenceEndEpochDay = normalized.recurrenceEndEpochDay,
                 dueTimeMinutes = if (alignedDue == null) null else startTime,
                 dueTimeEndMinutes = if (alignedDue == null) null else endTime
             )
@@ -44,18 +59,33 @@ class TaskRepository(
     }
 
     suspend fun update(task: TaskEntity) {
+        val normalized = TaskKindRules.normalize(
+            kind = task.kind,
+            priority = task.priority,
+            dueDateEpochDay = task.dueDateEpochDay,
+            recurrenceType = task.recurrenceType,
+            recurrenceWeekdayMask = task.recurrenceWeekdayMask,
+            recurrenceEndEpochDay = task.recurrenceEndEpochDay,
+            dueTimeMinutes = task.dueTimeMinutes,
+            dueTimeEndMinutes = task.dueTimeEndMinutes
+        )
         val alignedDue = DateUtils.alignDueDate(
-            task.dueDateEpochDay,
-            task.recurrenceType,
-            task.recurrenceWeekdayMask
+            normalized.dueDateEpochDay,
+            normalized.recurrenceType,
+            normalized.recurrenceWeekdayMask
         )
         val (startTime, endTime) = DateUtils.normalizedTimePeriod(
-            task.dueTimeMinutes,
-            task.dueTimeEndMinutes
+            normalized.dueTimeMinutes,
+            normalized.dueTimeEndMinutes
         )
         dao.update(
             task.copy(
+                priority = normalized.priority,
+                kind = normalized.kind,
                 dueDateEpochDay = alignedDue,
+                recurrenceType = normalized.recurrenceType,
+                recurrenceWeekdayMask = normalized.recurrenceWeekdayMask,
+                recurrenceEndEpochDay = normalized.recurrenceEndEpochDay,
                 dueTimeMinutes = if (alignedDue == null) null else startTime,
                 dueTimeEndMinutes = if (alignedDue == null) null else endTime,
                 updatedAt = System.currentTimeMillis()
