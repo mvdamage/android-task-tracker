@@ -429,6 +429,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                     is EditorState.Create -> viewModel.addTask(
                         title = result.title,
                         notes = result.notes,
+                        location = result.location,
                         priority = result.priority,
                         kind = result.kind,
                         dueDateEpochDay = result.dueDateEpochDay,
@@ -442,6 +443,7 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         task = current.task,
                         title = result.title,
                         notes = result.notes,
+                        location = result.location,
                         priority = result.priority,
                         kind = result.kind,
                         dueDateEpochDay = result.dueDateEpochDay,
@@ -822,6 +824,9 @@ private fun buildTaskSubtitle(
     val parts = mutableListOf<String>()
     if (task.kind != TaskKind.TASK) {
         parts += task.kind.label
+    }
+    if (task.kind == TaskKind.EVENT && task.location.isNotBlank()) {
+        parts += task.location.trim()
     }
     if (task.dueTimeMinutes != null) {
         parts += DateUtils.formatTaskTime(task.dueTimeMinutes, task.dueTimeEndMinutes).orEmpty()

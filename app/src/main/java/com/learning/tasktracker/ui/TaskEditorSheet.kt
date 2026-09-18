@@ -78,6 +78,7 @@ internal sealed interface EditorState {
 internal data class TaskEditorResult(
     val title: String,
     val notes: String,
+    val location: String,
     val priority: Priority,
     val kind: TaskKind,
     val dueDateEpochDay: Long?,
@@ -108,6 +109,7 @@ internal fun TaskEditorSheet(
     val existing = (state as? EditorState.Edit)?.task
     var title by remember(state) { mutableStateOf(existing?.title.orEmpty()) }
     var notes by remember(state) { mutableStateOf(existing?.notes.orEmpty()) }
+    var location by remember(state) { mutableStateOf(existing?.location.orEmpty()) }
     var priority by remember(state) { mutableStateOf(existing?.priority ?: Priority.MEDIUM) }
     var kind by remember(state) {
         mutableStateOf(
@@ -170,6 +172,7 @@ internal fun TaskEditorSheet(
                 dueTimeEndMinutes = null
                 periodMode = false
                 priority = Priority.MEDIUM
+                location = ""
             }
             TaskKind.EVENT -> {
                 if (dueDateEpochDay == null) {
@@ -180,7 +183,9 @@ internal fun TaskEditorSheet(
                     recurrenceType = RecurrenceType.NONE
                 }
             }
-            TaskKind.TASK -> Unit
+            TaskKind.TASK -> {
+                location = ""
+            }
         }
     }
 
@@ -217,6 +222,7 @@ internal fun TaskEditorSheet(
     val endTimeLabel = dueTimeEndMinutes?.let { DateUtils.formatTime(it) } ?: "Не задано"
     val timeEnabled = dueDateEpochDay != null && kind != TaskKind.BIRTHDAY
     val showPriority = kind == TaskKind.TASK
+    val showLocation = kind == TaskKind.EVENT
     val showRecurrenceEditor = kind != TaskKind.BIRTHDAY
     val showRecurrenceEnd = kind != TaskKind.BIRTHDAY && recurrenceType != RecurrenceType.NONE
     val showSubtasks = kind == TaskKind.TASK && subtasksEnabled && state is EditorState.Edit
@@ -270,6 +276,7 @@ internal fun TaskEditorSheet(
                                 TaskEditorResult(
                                     title = title,
                                     notes = notes,
+                                    location = if (kind == TaskKind.EVENT) location else "",
                                     priority = if (kind == TaskKind.TASK) priority else Priority.MEDIUM,
                                     kind = kind,
                                     dueDateEpochDay = dueDateEpochDay,
@@ -580,6 +587,22 @@ internal fun TaskEditorSheet(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+            if (showLocation) {
+                OutlinedTextField(
+                    value = location,
+                    onValueChange = { location = it },
+                    placeholder = { Text("Место проведения") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedIndicatorColor = MaterialTheme.extendedColors.divider
+                    )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },

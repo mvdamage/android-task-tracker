@@ -13,7 +13,8 @@ object TaskKindRules {
         val recurrenceWeekdayMask: Int,
         val recurrenceEndEpochDay: Long?,
         val dueTimeMinutes: Int?,
-        val dueTimeEndMinutes: Int?
+        val dueTimeEndMinutes: Int?,
+        val location: String
     )
 
     fun normalize(
@@ -25,6 +26,7 @@ object TaskKindRules {
         recurrenceEndEpochDay: Long?,
         dueTimeMinutes: Int?,
         dueTimeEndMinutes: Int?,
+        location: String = "",
         fallbackDateEpochDay: Long = DateUtils.todayEpochDay()
     ): Normalized {
         return when (kind) {
@@ -44,7 +46,8 @@ object TaskKindRules {
                     recurrenceEndEpochDay
                 },
                 dueTimeMinutes = dueTimeMinutes,
-                dueTimeEndMinutes = dueTimeEndMinutes
+                dueTimeEndMinutes = dueTimeEndMinutes,
+                location = ""
             )
             TaskKind.EVENT -> {
                 val due = dueDateEpochDay ?: fallbackDateEpochDay
@@ -64,7 +67,8 @@ object TaskKindRules {
                         recurrenceEndEpochDay
                     },
                     dueTimeMinutes = dueTimeMinutes,
-                    dueTimeEndMinutes = dueTimeEndMinutes
+                    dueTimeEndMinutes = dueTimeEndMinutes,
+                    location = location.trim()
                 )
             }
             TaskKind.BIRTHDAY -> {
@@ -77,7 +81,8 @@ object TaskKindRules {
                     recurrenceWeekdayMask = 0,
                     recurrenceEndEpochDay = null,
                     dueTimeMinutes = null,
-                    dueTimeEndMinutes = null
+                    dueTimeEndMinutes = null,
+                    location = ""
                 )
             }
         }

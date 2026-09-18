@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.TaskEntity
+import com.learning.tasktracker.data.TaskKind
 import com.learning.tasktracker.ui.theme.extendedColors
 import kotlin.math.max
 import kotlin.math.min
@@ -81,20 +82,35 @@ class TaskDayDragState {
         }
     }
 
-    private fun resolveHoveredDay(position: Offset): Long? =
-        dropBounds.entries
+    private fun acceptsDrop(task: TaskEntity, day: Long): Boolean {
+        // Events and birthdays must keep a calendar date.
+        if (day == DateUtils.UNDATED_GROUP_KEY &&
+            (task.kind == TaskKind.EVENT || task.kind == TaskKind.BIRTHDAY)
+        ) {
+            return false
+        }
+        return true
+    }
+
+    private fun resolveHoveredDay(position: Offset): Long? {
+        val dragged = draggedTask ?: return null
+        return dropBounds.entries
             .asSequence()
-            .filter { (_, rect) ->
-                rect.contains(position) && viewportBounds?.overlaps(rect) != false
+            .filter { (day, rect) ->
+                acceptsDrop(dragged, day) &&
+                    rect.contains(position) &&
+                    viewportBounds?.overlaps(rect) != false
             }
             .minByOrNull { (_, rect) -> rect.width * rect.height }
             ?.key
+    }
 
     fun finishDrag(onDrop: (TaskEntity, Long) -> Unit) {
         val targetDay = hoveredDay
         val dragged = draggedTask
         if (dragged != null && targetDay != null &&
-            targetDay != DateUtils.toGroupKey(dragged.dueDateEpochDay)
+            targetDay != DateUtils.toGroupKey(dragged.dueDateEpochDay) &&
+            acceptsDrop(dragged, targetDay)
         ) {
             onDrop(dragged, targetDay)
         }
@@ -286,13 +302,18 @@ fun QuickDropDayRow(
     dragState: TaskDayDragState,
     modifier: Modifier = Modifier
 ) {
-    val chips = listOf(
-        today to "Сегодня",
-        today + 1 to "Завтра",
-        today + 2 to "Послезавтра",
-        today + 7 to "+7 дней",
-        DateUtils.UNDATED_GROUP_KEY to "Без даты"
-    )
+    val dragged = dragState.draggedTask
+    val allowUndated = dragged == null ||
+        (dragged.kind != TaskKind.EVENT && dragged.kind != TaskKind.BIRTHDAY)
+    val chips = buildList {
+        add(today to "Сегодня")
+        add(today + 1 to "Завтра")
+        add(today + 2 to "Послезавтра")
+        add(today + 7 to "+7 дней")
+        if (allowUndated) {
+            add(DateUtils.UNDATED_GROUP_KEY to "Без даты")
+        }
+    }
     LazyRow(
         modifier = modifier
             .fillMaxWidth()

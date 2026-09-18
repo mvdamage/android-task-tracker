@@ -208,13 +208,15 @@ class TaskViewModel(
         recurrenceEndEpochDay: Long?,
         dueTimeMinutes: Int?,
         dueTimeEndMinutes: Int?,
-        kind: TaskKind = TaskKind.TASK
+        kind: TaskKind = TaskKind.TASK,
+        location: String = ""
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
             repository.add(
                 title = title,
                 notes = notes,
+                location = location,
                 priority = priority,
                 kind = kind,
                 dueDateEpochDay = dueDateEpochDay,
@@ -238,7 +240,8 @@ class TaskViewModel(
         recurrenceEndEpochDay: Long?,
         dueTimeMinutes: Int?,
         dueTimeEndMinutes: Int?,
-        kind: TaskKind = task.kind
+        kind: TaskKind = task.kind,
+        location: String = ""
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -246,6 +249,7 @@ class TaskViewModel(
                 task.copy(
                     title = title.trim(),
                     notes = notes.trim(),
+                    location = location,
                     priority = priority,
                     kind = kind,
                     dueDateEpochDay = dueDateEpochDay,

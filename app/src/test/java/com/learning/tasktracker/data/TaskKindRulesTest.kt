@@ -65,4 +65,36 @@ class TaskKindRulesTest {
         assertEquals(RecurrenceType.WEEKLY, result.recurrenceType)
         assertEquals(480, result.dueTimeMinutes)
     }
+
+    @Test
+    fun eventKeepsLocation() {
+        val result = TaskKindRules.normalize(
+            kind = TaskKind.EVENT,
+            priority = Priority.MEDIUM,
+            dueDateEpochDay = 42,
+            recurrenceType = RecurrenceType.NONE,
+            recurrenceWeekdayMask = 0,
+            recurrenceEndEpochDay = null,
+            dueTimeMinutes = null,
+            dueTimeEndMinutes = null,
+            location = "  Парк Горького  "
+        )
+        assertEquals("Парк Горького", result.location)
+    }
+
+    @Test
+    fun taskClearsLocation() {
+        val result = TaskKindRules.normalize(
+            kind = TaskKind.TASK,
+            priority = Priority.HIGH,
+            dueDateEpochDay = 5,
+            recurrenceType = RecurrenceType.NONE,
+            recurrenceWeekdayMask = 0,
+            recurrenceEndEpochDay = null,
+            dueTimeMinutes = null,
+            dueTimeEndMinutes = null,
+            location = "Somewhere"
+        )
+        assertEquals("", result.location)
+    }
 }

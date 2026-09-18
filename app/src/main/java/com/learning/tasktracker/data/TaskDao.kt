@@ -49,6 +49,35 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): TaskEntity?
 
+    /**
+     * Active continuation spawned when a recurring occurrence was completed.
+     * Newest match wins if several exist.
+     */
+    @Query(
+        """
+        SELECT * FROM tasks
+        WHERE isDone = 0
+            AND id != :excludeId
+            AND title = :title
+            AND kind = :kind
+            AND recurrenceType = :recurrenceType
+            AND recurrenceInterval = :recurrenceInterval
+            AND recurrenceWeekdayMask = :recurrenceWeekdayMask
+            AND dueDateEpochDay = :dueDateEpochDay
+        ORDER BY createdAt DESC
+        LIMIT 1
+        """
+    )
+    suspend fun findActiveContinuation(
+        excludeId: Long,
+        title: String,
+        kind: TaskKind,
+        recurrenceType: RecurrenceType,
+        recurrenceInterval: Int,
+        recurrenceWeekdayMask: Int,
+        dueDateEpochDay: Long
+    ): TaskEntity?
+
     @Query("DELETE FROM tasks WHERE isDone = 1 AND kind != 'BIRTHDAY'")
     suspend fun deleteCompleted()
 

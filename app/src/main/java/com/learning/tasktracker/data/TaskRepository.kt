@@ -21,7 +21,8 @@ class TaskRepository(
         recurrenceEndEpochDay: Long? = null,
         dueTimeMinutes: Int? = null,
         dueTimeEndMinutes: Int? = null,
-        kind: TaskKind = TaskKind.TASK
+        kind: TaskKind = TaskKind.TASK,
+        location: String = ""
     ) {
         val normalized = TaskKindRules.normalize(
             kind = kind,
@@ -31,7 +32,8 @@ class TaskRepository(
             recurrenceWeekdayMask = recurrenceWeekdayMask,
             recurrenceEndEpochDay = recurrenceEndEpochDay,
             dueTimeMinutes = dueTimeMinutes,
-            dueTimeEndMinutes = dueTimeEndMinutes
+            dueTimeEndMinutes = dueTimeEndMinutes,
+            location = location
         )
         val alignedDue = DateUtils.alignDueDate(
             normalized.dueDateEpochDay,
@@ -46,6 +48,7 @@ class TaskRepository(
             TaskEntity(
                 title = title.trim(),
                 notes = notes.trim(),
+                location = normalized.location,
                 priority = normalized.priority,
                 kind = normalized.kind,
                 dueDateEpochDay = alignedDue,
@@ -67,7 +70,8 @@ class TaskRepository(
             recurrenceWeekdayMask = task.recurrenceWeekdayMask,
             recurrenceEndEpochDay = task.recurrenceEndEpochDay,
             dueTimeMinutes = task.dueTimeMinutes,
-            dueTimeEndMinutes = task.dueTimeEndMinutes
+            dueTimeEndMinutes = task.dueTimeEndMinutes,
+            location = task.location
         )
         val alignedDue = DateUtils.alignDueDate(
             normalized.dueDateEpochDay,
@@ -82,6 +86,7 @@ class TaskRepository(
             task.copy(
                 priority = normalized.priority,
                 kind = normalized.kind,
+                location = normalized.location,
                 dueDateEpochDay = alignedDue,
                 recurrenceType = normalized.recurrenceType,
                 recurrenceWeekdayMask = normalized.recurrenceWeekdayMask,
@@ -169,6 +174,35 @@ class TaskRepository(
             dao.update(current.copy(isDone = true, updatedAt = now))
             return
         }
+
+        // Undo of a completed recurring occurrence: remove the spawned next copy first.
+        if (current.isDone && current.isRecurring && due != null) {
+            val next = DateUtils.nextDueDate(
+                due,
+                current.recurrenceType,
+                current.recurrenceInterval,
+                current.recurrenceWeekdayMask,
+                current.recurrenceEndEpochDay
+            )
+            if (next != null) {
+                val spawned = dao.findActiveContinuation(
+                    excludeId = current.id,
+                    title = current.title,
+                    kind = current.kind,
+                    recurrenceType = current.recurrenceType,
+                    recurrenceInterval = current.recurrenceInterval,
+                    recurrenceWeekdayMask = current.recurrenceWeekdayMask,
+                    dueDateEpochDay = next
+                )
+                if (spawned != null) {
+                    subtaskDao.deleteForParent(spawned.id)
+                    dao.delete(spawned)
+                }
+            }
+            dao.update(current.copy(isDone = false, updatedAt = now))
+            return
+        }
+
         dao.update(current.copy(isDone = !current.isDone, updatedAt = now))
     }
 

@@ -8,6 +8,8 @@ data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val notes: String = "",
+    /** Venue / place for events; empty for tasks and birthdays. */
+    val location: String = "",
     val priority: Priority = Priority.MEDIUM,
     val kind: TaskKind = TaskKind.TASK,
     val isDone: Boolean = false,
