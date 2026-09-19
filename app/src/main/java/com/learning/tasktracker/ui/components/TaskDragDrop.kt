@@ -207,16 +207,18 @@ fun Modifier.taskDragSource(
     val haptic = LocalHapticFeedback.current
     var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val currentCoordinates by rememberUpdatedState(layoutCoordinates)
+    val currentTask by rememberUpdatedState(task)
+    val currentOnTap by rememberUpdatedState(onTap)
 
     this
         .onGloballyPositioned { layoutCoordinates = it }
         .pointerInput(task.id) {
             detectTapGestures(
-                onTap = { onTap() },
+                onTap = { currentOnTap() },
                 onLongPress = { offset ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     val coordinates = currentCoordinates ?: return@detectTapGestures
-                    dragState.startDrag(task, coordinates.localToRoot(offset))
+                    dragState.startDrag(currentTask, coordinates.localToRoot(offset))
                 }
             )
         }
