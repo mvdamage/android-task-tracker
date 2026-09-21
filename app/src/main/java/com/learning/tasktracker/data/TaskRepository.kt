@@ -206,6 +206,18 @@ class TaskRepository(
         dao.update(current.copy(isDone = !current.isDone, updatedAt = now))
     }
 
+    suspend fun updateNotes(taskId: Long, notes: String) {
+        val current = dao.getById(taskId) ?: return
+        val trimmed = notes.trim()
+        if (current.notes == trimmed) return
+        dao.update(
+            current.copy(
+                notes = trimmed,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     suspend fun delete(task: TaskEntity) {
         subtaskDao.deleteForParent(task.id)
         dao.delete(task)
@@ -263,33 +275,8 @@ class TaskRepository(
                 )
             }
             dao.deleteCompleted()
-            // Birthdays are excluded from overdue catch-up so the anniversary stays on its day.
-            dao.getOverdueRecurring(today).forEach { task ->
-                val end = task.recurrenceEndEpochDay
-                if (end != null && today > end) {
-                    dao.update(
-                        task.copy(isDone = true, updatedAt = System.currentTimeMillis())
-                    )
-                    return@forEach
-                }
-                val due = task.dueDateEpochDay ?: return@forEach
-                val caughtUp = DateUtils.catchUpDueDate(
-                    dueDate = due,
-                    today = today,
-                    type = task.recurrenceType,
-                    interval = task.recurrenceInterval,
-                    weekdayMask = task.recurrenceWeekdayMask,
-                    endEpochDay = end
-                )
-                if (caughtUp != due) {
-                    dao.update(
-                        task.copy(
-                            dueDateEpochDay = caughtUp,
-                            updatedAt = System.currentTimeMillis()
-                        )
-                    )
-                }
-            }
+            // Do not auto-advance overdue recurring tasks: they stay on the missed
+            // period until the user checks them off (toggleDone then spawns next).
             dayRolloverStore.setLastCleanupEpochDay(today)
         }
     }

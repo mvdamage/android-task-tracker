@@ -263,6 +263,10 @@ class TaskViewModel(
         }
     }
 
+    fun updateNotes(taskId: Long, notes: String) {
+        viewModelScope.launch { repository.updateNotes(taskId, notes) }
+    }
+
     fun toggleDone(task: TaskEntity) {
         viewModelScope.launch {
             toggleDoneMutex.withLock {

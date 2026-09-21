@@ -424,6 +424,9 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                 null
             },
             onDismiss = { editor = null },
+            onNotesAutosave = editTaskId?.let { taskId ->
+                { notes -> viewModel.updateNotes(taskId, notes) }
+            },
             onSave = { result ->
                 when (current) {
                     is EditorState.Create -> viewModel.addTask(

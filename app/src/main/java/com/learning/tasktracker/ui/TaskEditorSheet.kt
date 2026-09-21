@@ -46,10 +46,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.rememberUpdatedState
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
@@ -103,12 +105,14 @@ internal fun TaskEditorSheet(
     onDeleteSubtask: (SubtaskEntity) -> Unit,
     onDeleteTask: (() -> Unit)?,
     onDismiss: () -> Unit,
-    onSave: (TaskEditorResult) -> Unit
+    onSave: (TaskEditorResult) -> Unit,
+    onNotesAutosave: ((String) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val existing = (state as? EditorState.Edit)?.task
     var title by remember(state) { mutableStateOf(existing?.title.orEmpty()) }
     var notes by remember(state) { mutableStateOf(existing?.notes.orEmpty()) }
+    var persistedNotes by remember(state) { mutableStateOf(existing?.notes.orEmpty()) }
     var location by remember(state) { mutableStateOf(existing?.location.orEmpty()) }
     var priority by remember(state) { mutableStateOf(existing?.priority ?: Priority.MEDIUM) }
     var kind by remember(state) {
@@ -157,6 +161,15 @@ internal fun TaskEditorSheet(
     var showEndDatePicker by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
     var newSubtaskTitle by remember(state) { mutableStateOf("") }
+    val notesAutosave = rememberUpdatedState(onNotesAutosave)
+
+    fun persistNotesIfNeeded() {
+        val saveNotes = notesAutosave.value ?: return
+        if (notes == persistedNotes) return
+        saveNotes(notes)
+        persistedNotes = notes.trim()
+        notes = persistedNotes
+    }
 
     fun applyKind(next: TaskKind) {
         kind = next
@@ -609,7 +622,13 @@ internal fun TaskEditorSheet(
                 placeholder = { Text("Заметки") },
                 minLines = 2,
                 maxLines = 5,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focusState ->
+                        if (!focusState.isFocused) {
+                            persistNotesIfNeeded()
+                        }
+                    },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
