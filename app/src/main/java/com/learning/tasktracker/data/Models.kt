@@ -31,3 +31,17 @@ enum class RecurrenceType(val label: String) {
     YEARLY("Раз в год"),
     CUSTOM_DAYS("Свои дни")
 }
+
+enum class NoteFormat(val label: String) {
+    TEXT("Текст"),
+    LIST("Список")
+}
+
+enum class NoteTheme(val label: String) {
+    GENERAL("Общее"),
+    WORK("Работа"),
+    PERSONAL("Личное"),
+    IDEAS("Идеи"),
+    HOME("Дом"),
+    OTHER("Другое")
+}

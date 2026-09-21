@@ -2,9 +2,11 @@ package com.learning.tasktracker.ui
 
 object TestTags {
     const val TAB_TASKS = "tab_tasks"
+    const val TAB_NOTES = "tab_notes"
     const val TAB_SHOPPING = "tab_shopping"
     const val QUICK_ADD_TASK = "quick_add_task"
     const val QUICK_ADD_SHOPPING = "quick_add_shopping"
+    const val ADD_NOTE_FAB = "add_note_fab"
     const val FILTER_ALL = "filter_all"
     const val FILTER_ACTIVE = "filter_active"
     const val FILTER_DONE = "filter_done"

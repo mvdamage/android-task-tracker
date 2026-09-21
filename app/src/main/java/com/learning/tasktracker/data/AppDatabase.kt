@@ -27,14 +27,38 @@ class Converters {
 
     @TypeConverter
     fun toRecurrenceType(value: String): RecurrenceType = RecurrenceType.valueOf(value)
+
+    @TypeConverter
+    fun fromNoteFormat(value: NoteFormat): String = value.name
+
+    @TypeConverter
+    fun toNoteFormat(value: String): NoteFormat = NoteFormat.valueOf(value)
+
+    @TypeConverter
+    fun fromNoteTheme(value: NoteTheme): String = value.name
+
+    @TypeConverter
+    fun toNoteTheme(value: String): NoteTheme = NoteTheme.valueOf(value)
 }
 
-@Database(entities = [TaskEntity::class, ShoppingItemEntity::class, ShoppingCategoryEntity::class, SubtaskEntity::class], version = 12, exportSchema = false)
+@Database(
+    entities = [
+        TaskEntity::class,
+        ShoppingItemEntity::class,
+        ShoppingCategoryEntity::class,
+        SubtaskEntity::class,
+        NoteEntity::class,
+        NoteListItemEntity::class
+    ],
+    version = 13,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun taskDao(): TaskDao
     abstract fun shoppingDao(): ShoppingDao
     abstract fun subtaskDao(): SubtaskDao
+    abstract fun noteDao(): NoteDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -187,6 +211,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS notes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        title TEXT NOT NULL,
+                        body TEXT NOT NULL,
+                        format TEXT NOT NULL,
+                        theme TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS note_list_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        noteId INTEGER NOT NULL,
+                        text TEXT NOT NULL,
+                        isChecked INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(noteId) REFERENCES notes(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_note_list_items_noteId ON note_list_items(noteId)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -201,7 +260,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
-            MIGRATION_11_12
+            MIGRATION_11_12,
+            MIGRATION_12_13
         )
 
         fun get(context: Context): AppDatabase {

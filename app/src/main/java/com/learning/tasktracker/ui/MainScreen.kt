@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.outlined.ShoppingCart
@@ -37,12 +39,14 @@ private enum class AppTab(
     val filledIcon: ImageVector
 ) {
     TASKS("Задачи", Icons.Outlined.TaskAlt, Icons.Filled.TaskAlt),
+    NOTES("Заметки", Icons.AutoMirrored.Outlined.Notes, Icons.AutoMirrored.Filled.Notes),
     SHOPPING("Покупки", Icons.Outlined.ShoppingCart, Icons.Filled.ShoppingCart)
 }
 
 @Composable
 fun MainScreen(
     taskViewModel: TaskViewModel,
+    notesViewModel: NotesViewModel,
     shoppingViewModel: ShoppingViewModel
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TASKS) }
@@ -59,6 +63,7 @@ fun MainScreen(
                 AppTab.entries.forEach { tab ->
                     val tabTag = when (tab) {
                         AppTab.TASKS -> TestTags.TAB_TASKS
+                        AppTab.NOTES -> TestTags.TAB_NOTES
                         AppTab.SHOPPING -> TestTags.TAB_SHOPPING
                     }
                     NavigationBarItem(
@@ -108,6 +113,7 @@ fun MainScreen(
             ) { tab ->
                 when (tab) {
                     AppTab.TASKS -> TaskTrackerScreen(viewModel = taskViewModel)
+                    AppTab.NOTES -> NotesScreen(viewModel = notesViewModel)
                     AppTab.SHOPPING -> ShoppingListScreen(viewModel = shoppingViewModel)
                 }
             }
