@@ -69,20 +69,6 @@ fun NotesScreen(viewModel: NotesViewModel) {
                         fontWeight = FontWeight.Bold
                     )
                 },
-                actions = {
-                    if (state.completedCount > 0) {
-                        IconButton(
-                            onClick = { confirmClearCompleted = true },
-                            modifier = Modifier.testTag(TestTags.CLEAR_COMPLETED_NOTES)
-                        ) {
-                            Icon(
-                                Icons.Outlined.DeleteSweep,
-                                contentDescription = "Удалить выполненные",
-                                tint = muted
-                            )
-                        }
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 )
@@ -137,6 +123,33 @@ fun NotesScreen(viewModel: NotesViewModel) {
                     bottom = 88.dp
                 )
             ) {
+                item(key = "notes_list_header") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 0.dp, top = 4.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Все заметки",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = muted
+                        )
+                        if (state.completedCount > 0) {
+                            IconButton(
+                                onClick = { confirmClearCompleted = true },
+                                modifier = Modifier.testTag(TestTags.CLEAR_COMPLETED_NOTES)
+                            ) {
+                                Icon(
+                                    Icons.Outlined.DeleteSweep,
+                                    contentDescription = "Очистить выполненные списки",
+                                    tint = muted
+                                )
+                            }
+                        }
+                    }
+                }
                 state.groups.forEach { group ->
                     item(key = "theme_${group.theme.name}") {
                         Text(
@@ -187,14 +200,6 @@ fun NotesScreen(viewModel: NotesViewModel) {
                     )
                 }
                 editor = null
-            },
-            onDelete = if (current is NoteEditorState.Edit) {
-                {
-                    viewModel.deleteNote(current.note)
-                    editor = null
-                }
-            } else {
-                null
             }
         )
     }
@@ -202,7 +207,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
     if (confirmClearCompleted) {
         AlertDialog(
             onDismissRequest = { confirmClearCompleted = false },
-            title = { Text("Удалить выполненные?") },
+            title = { Text("Очистить выполненные?") },
             text = {
                 Text(
                     "Будут удалены все списки, в которых отмечены все пункты " +
@@ -215,7 +220,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
                         viewModel.clearCompleted()
                         confirmClearCompleted = false
                     }
-                ) { Text("Удалить") }
+                ) { Text("Очистить") }
             },
             dismissButton = {
                 TextButton(onClick = { confirmClearCompleted = false }) { Text("Отмена") }

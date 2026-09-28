@@ -72,8 +72,7 @@ private data class DraftListRow(
 internal fun NoteEditorSheet(
     state: NoteEditorState,
     onDismiss: () -> Unit,
-    onSave: (NoteEditorResult) -> Unit,
-    onDelete: (() -> Unit)?
+    onSave: (NoteEditorResult) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val existing = (state as? NoteEditorState.Edit)?.note
@@ -285,13 +284,6 @@ internal fun NoteEditorSheet(
                         unfocusedIndicatorColor = MaterialTheme.extendedColors.divider
                     )
                 )
-            }
-
-            if (onDelete != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = onDelete) {
-                    Text("Удалить заметку", color = MaterialTheme.extendedColors.overdue)
-                }
             }
         }
     }
