@@ -633,7 +633,7 @@ private fun ColumnScope.TaskCalendarContent(
                 FilterChip(
                     selected = false,
                     onClick = { onCreate(TaskKind.EVENT) },
-                    label = { Text("Событие") },
+                    label = { Text("Событие и праздники") },
                     leadingIcon = {
                         Icon(
                             Icons.Outlined.Event,
