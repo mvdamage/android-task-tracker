@@ -571,7 +571,7 @@ private fun ShoppingEmptyState(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Нажмите + или строку выше",
+            "Нажмите + или микрофон, чтобы добавить голосом",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

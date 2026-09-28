@@ -162,10 +162,41 @@ class ShoppingVoiceParserTest {
             categories = listOf(products),
             categoryIdByTitleLower = emptyMap()
         )
-        // shared prefix not matched → whole string treated as one title? 
-        // Actually regex matches but category not found → residual stays raw, sharedCategoryId null
-        // Then "в Несуществующая: хлеб" is one fragment - local category also won't match
+        // shared prefix not matched → residual stays raw; one title without category
         assertEquals(1, lines.size)
         assertNull(lines[0].categoryId)
+    }
+
+    @Test
+    fun newlinesSplitItems() {
+        val lines = ShoppingVoiceParser.parseShoppingVoice(
+            "хлеб\nмолоко\nяйца",
+            categories = emptyList(),
+            categoryIdByTitleLower = emptyMap()
+        )
+        assertEquals(listOf("хлеб", "молоко", "яйца"), lines.map { it.title })
+    }
+
+    @Test
+    fun truncateLongTitle() {
+        val long = "а".repeat(250)
+        val lines = ShoppingVoiceParser.parseShoppingVoice(
+            long,
+            categories = emptyList(),
+            categoryIdByTitleLower = emptyMap()
+        )
+        assertEquals(1, lines.size)
+        assertEquals(200, lines[0].title.length)
+        assertTrue(lines[0].truncated)
+    }
+
+    @Test
+    fun emptyRaw_returnsEmpty() {
+        val lines = ShoppingVoiceParser.parseShoppingVoice(
+            "   ",
+            categories = emptyList(),
+            categoryIdByTitleLower = emptyMap()
+        )
+        assertTrue(lines.isEmpty())
     }
 }
