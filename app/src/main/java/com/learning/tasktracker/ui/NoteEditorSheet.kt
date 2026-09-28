@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -35,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.learning.tasktracker.data.NoteDraftListItem
@@ -98,19 +98,21 @@ internal fun NoteEditorSheet(
             newListItem.isNotBlank()
         )
 
+    fun commitNewListItem() {
+        val trimmed = newListItem.trim()
+        if (trimmed.isEmpty()) return
+        listRows.add(DraftListRow(trimmed, false))
+        newListItem = ""
+    }
+
     fun buildResult(): NoteEditorResult {
-        val drafts = listRows
-            .map { NoteDraftListItem(it.text, it.isChecked) }
-            .toMutableList()
-        if (format == NoteFormat.LIST && newListItem.isNotBlank()) {
-            drafts += NoteDraftListItem(newListItem.trim(), false)
-        }
+        commitNewListItem()
         return NoteEditorResult(
             title = title,
             body = body,
             format = format,
             theme = theme,
-            listItems = drafts
+            listItems = listRows.map { NoteDraftListItem(it.text, it.isChecked) }
         )
     }
 
@@ -218,19 +220,22 @@ internal fun NoteEditorSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
                         CircularTaskCheckbox(
                             checked = row.isChecked,
                             onCheckedChange = {
                                 listRows[index] = row.copy(isChecked = !row.isChecked)
                             },
-                            size = 20.dp
+                            size = 20.dp,
+                            modifier = Modifier.padding(top = 12.dp)
                         )
                         OutlinedTextField(
                             value = row.text,
                             onValueChange = { listRows[index] = row.copy(text = it) },
-                            singleLine = true,
+                            singleLine = false,
+                            minLines = 1,
+                            maxLines = 6,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 8.dp),
@@ -248,7 +253,10 @@ internal fun NoteEditorSheet(
                                 }
                             )
                         )
-                        IconButton(onClick = { listRows.removeAt(index) }) {
+                        IconButton(
+                            onClick = { listRows.removeAt(index) },
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
                             Icon(
                                 Icons.Outlined.Delete,
                                 contentDescription = "Удалить пункт"
@@ -256,35 +264,27 @@ internal fun NoteEditorSheet(
                         }
                     }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedTextField(
-                        value = newListItem,
-                        onValueChange = { newListItem = it },
-                        placeholder = { Text("Новый пункт") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.extendedColors.divider
-                        )
-                    )
-                    IconButton(
-                        onClick = {
-                            if (newListItem.isNotBlank()) {
-                                listRows.add(DraftListRow(newListItem.trim(), false))
-                                newListItem = ""
+                OutlinedTextField(
+                    value = newListItem,
+                    onValueChange = { newListItem = it },
+                    placeholder = { Text("Новый пункт") },
+                    singleLine = false,
+                    minLines = 1,
+                    maxLines = 6,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focusState ->
+                            if (!focusState.isFocused) {
+                                commitNewListItem()
                             }
-                        }
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Добавить пункт")
-                    }
-                }
+                        },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                        unfocusedIndicatorColor = MaterialTheme.extendedColors.divider
+                    )
+                )
             }
 
             if (onDelete != null) {
