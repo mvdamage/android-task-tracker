@@ -16,12 +16,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -49,6 +53,8 @@ import com.learning.tasktracker.ui.theme.extendedColors
 fun NotesScreen(viewModel: NotesViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var editor by remember { mutableStateOf<NoteEditorState?>(null) }
+    var confirmClearCompleted by remember { mutableStateOf(false) }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -62,6 +68,20 @@ fun NotesScreen(viewModel: NotesViewModel) {
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold
                     )
+                },
+                actions = {
+                    if (state.completedCount > 0) {
+                        IconButton(
+                            onClick = { confirmClearCompleted = true },
+                            modifier = Modifier.testTag(TestTags.CLEAR_COMPLETED_NOTES)
+                        ) {
+                            Icon(
+                                Icons.Outlined.DeleteSweep,
+                                contentDescription = "Удалить выполненные",
+                                tint = muted
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -91,7 +111,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
                 Icon(
                     Icons.AutoMirrored.Outlined.Notes,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = muted,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 Text(
@@ -103,7 +123,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
                 Text(
                     text = "Добавьте текстовую заметку или список",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = muted
                 )
             }
         } else {
@@ -122,7 +142,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
                         Text(
                             text = group.theme.label,
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = muted,
                             modifier = Modifier.padding(top = 12.dp, bottom = 4.dp, start = 4.dp)
                         )
                     }
@@ -131,6 +151,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
                         NoteRow(
                             note = note,
                             listItems = listItems,
+                            completed = isNoteCompleted(note, listItems),
                             onClick = {
                                 editor = NoteEditorState.Edit(note, listItems)
                             },
@@ -177,15 +198,51 @@ fun NotesScreen(viewModel: NotesViewModel) {
             }
         )
     }
+
+    if (confirmClearCompleted) {
+        AlertDialog(
+            onDismissRequest = { confirmClearCompleted = false },
+            title = { Text("Удалить выполненные?") },
+            text = {
+                Text(
+                    "Будут удалены все списки, в которых отмечены все пункты " +
+                        "(${state.completedCount})."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearCompleted()
+                        confirmClearCompleted = false
+                    }
+                ) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearCompleted = false }) { Text("Отмена") }
+            }
+        )
+    }
 }
 
 @Composable
 private fun NoteRow(
     note: NoteEntity,
     listItems: List<NoteListItemEntity>,
+    completed: Boolean,
     onClick: () -> Unit,
     onToggleListItem: (NoteListItemEntity) -> Unit
 ) {
+    val primaryColor = if (completed) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val secondaryColor = if (completed) {
+        MaterialTheme.extendedColors.divider
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -201,6 +258,8 @@ private fun NoteRow(
                 text = note.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
+                color = primaryColor,
+                textDecoration = if (completed) TextDecoration.LineThrough else null,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -208,7 +267,7 @@ private fun NoteRow(
             Text(
                 text = note.format.label,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = secondaryColor,
                 modifier = Modifier.padding(start = 8.dp)
             )
         }
@@ -219,7 +278,7 @@ private fun NoteRow(
                     Text(
                         text = note.body,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = secondaryColor,
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -234,6 +293,11 @@ private fun NoteRow(
                     )
                 } else {
                     listItems.take(4).forEach { item ->
+                        val itemColor = if (completed || item.isChecked) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -248,7 +312,7 @@ private fun NoteRow(
                             Text(
                                 text = item.text,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = itemColor,
                                 textDecoration = if (item.isChecked) {
                                     TextDecoration.LineThrough
                                 } else {
@@ -264,7 +328,7 @@ private fun NoteRow(
                         Text(
                             text = "ещё ${listItems.size - 4}",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = secondaryColor,
                             modifier = Modifier.padding(top = 4.dp, start = 26.dp)
                         )
                     }

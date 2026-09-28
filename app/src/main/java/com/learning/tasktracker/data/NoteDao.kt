@@ -50,6 +50,9 @@ interface NoteDao {
     @Query("DELETE FROM note_list_items WHERE noteId = :noteId")
     suspend fun deleteListItemsForNote(noteId: Long)
 
+    @Query("SELECT * FROM notes WHERE format = 'LIST'")
+    suspend fun getListNotes(): List<NoteEntity>
+
     @Transaction
     suspend fun replaceListItems(noteId: Long, items: List<NoteListItemEntity>) {
         deleteListItemsForNote(noteId)

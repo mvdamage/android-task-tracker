@@ -99,6 +99,16 @@ class NotesRepository(
         dao.delete(note)
     }
 
+    /** Deletes list notes where every item is checked (and there is at least one item). */
+    suspend fun deleteCompletedListNotes() {
+        dao.getListNotes().forEach { note ->
+            val items = dao.listItemsForNote(note.id)
+            if (items.isNotEmpty() && items.all { it.isChecked }) {
+                delete(note)
+            }
+        }
+    }
+
     suspend fun toggleListItem(item: NoteListItemEntity) {
         dao.updateListItem(
             item.copy(

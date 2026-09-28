@@ -18,13 +18,22 @@ import kotlinx.coroutines.launch
 data class NotesUiState(
     val notes: List<NoteEntity> = emptyList(),
     val listItemsByNoteId: Map<Long, List<NoteListItemEntity>> = emptyMap(),
-    val groups: List<NoteThemeGroup> = emptyList()
+    val groups: List<NoteThemeGroup> = emptyList(),
+    val completedCount: Int = 0
 )
 
 data class NoteThemeGroup(
     val theme: NoteTheme,
     val notes: List<NoteEntity>
 )
+
+fun isNoteCompleted(
+    note: NoteEntity,
+    listItems: List<NoteListItemEntity>
+): Boolean =
+    note.format == NoteFormat.LIST &&
+        listItems.isNotEmpty() &&
+        listItems.all { it.isChecked }
 
 class NotesViewModel(
     private val repository: NotesRepository
@@ -40,6 +49,9 @@ class NotesViewModel(
             groups = NoteTheme.entries.mapNotNull { theme ->
                 val themeNotes = notes.filter { it.theme == theme }
                 if (themeNotes.isEmpty()) null else NoteThemeGroup(theme, themeNotes)
+            },
+            completedCount = notes.count { note ->
+                isNoteCompleted(note, byNoteId[note.id].orEmpty())
             }
         )
     }.stateIn(
@@ -75,6 +87,10 @@ class NotesViewModel(
 
     fun deleteNote(note: NoteEntity) {
         viewModelScope.launch { repository.delete(note) }
+    }
+
+    fun clearCompleted() {
+        viewModelScope.launch { repository.deleteCompletedListNotes() }
     }
 
     fun toggleListItem(item: NoteListItemEntity) {
