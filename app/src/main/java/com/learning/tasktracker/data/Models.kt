@@ -8,7 +8,7 @@ enum class Priority(val label: String) {
 
 enum class TaskKind(val label: String) {
     TASK("Задача"),
-    EVENT("Событие"),
+    EVENT("Событие и праздники"),
     BIRTHDAY("День рождения")
 }
 
