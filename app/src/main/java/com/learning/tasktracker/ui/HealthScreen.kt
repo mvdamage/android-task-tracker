@@ -48,11 +48,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.HealthAnalysisEntity
+import com.learning.tasktracker.data.HealthAnalysisKind
 import com.learning.tasktracker.data.HealthAnalysisStatus
 import com.learning.tasktracker.data.HealthPersonEntity
 import com.learning.tasktracker.data.HealthPrescriptionEntity
 import com.learning.tasktracker.data.HealthPrescriptionType
 import com.learning.tasktracker.data.HealthRules
+import com.learning.tasktracker.data.labelFor
 import com.learning.tasktracker.ui.components.AnyDoDivider
 import kotlinx.coroutines.launch
 
@@ -62,6 +64,7 @@ private sealed class HealthDialog {
     data object AddAnalysis : HealthDialog()
     data class EditAnalysis(val analysis: HealthAnalysisEntity) : HealthDialog()
     data object AddPrescription : HealthDialog()
+    data class AddPrescriptionForVisit(val visit: HealthAnalysisEntity) : HealthDialog()
     data class EditPrescription(val prescription: HealthPrescriptionEntity) : HealthDialog()
     data class CreateTask(val prescription: HealthPrescriptionEntity) : HealthDialog()
     data class ConfirmDeletePerson(val person: HealthPersonEntity) : HealthDialog()
@@ -157,7 +160,7 @@ fun HealthScreen(viewModel: HealthViewModel) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Для него можно вести анализы и назначения. До ${HealthRules.MAX_PERSONS} человек.",
+                        text = "Для него можно вести анализы/врачей и назначения. До ${HealthRules.MAX_PERSONS} человек.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = muted
                     )
@@ -210,7 +213,7 @@ fun HealthScreen(viewModel: HealthViewModel) {
 
                     item {
                         SectionHeader(
-                            title = "Анализы",
+                            title = "Анализы/врачи",
                             actionLabel = "Добавить",
                             onAction = { dialog = HealthDialog.AddAnalysis },
                             actionTestTag = TestTags.HEALTH_ADD_ANALYSIS
@@ -219,7 +222,7 @@ fun HealthScreen(viewModel: HealthViewModel) {
                     if (state.analyses.isEmpty()) {
                         item {
                             Text(
-                                "Пока нет анализов",
+                                "Пока нет анализов и приёмов",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = muted,
                                 modifier = Modifier.padding(vertical = 8.dp)
@@ -229,7 +232,14 @@ fun HealthScreen(viewModel: HealthViewModel) {
                         items(state.analyses, key = { "a-${it.id}" }) { analysis ->
                             AnalysisRow(
                                 analysis = analysis,
-                                onClick = { dialog = HealthDialog.EditAnalysis(analysis) }
+                                onClick = { dialog = HealthDialog.EditAnalysis(analysis) },
+                                onAddPrescription = if (analysis.kind == HealthAnalysisKind.DOCTOR) {
+                                    {
+                                        dialog = HealthDialog.AddPrescriptionForVisit(analysis)
+                                    }
+                                } else {
+                                    null
+                                }
                             )
                             AnyDoDivider()
                         }
@@ -256,9 +266,13 @@ fun HealthScreen(viewModel: HealthViewModel) {
                         items(state.prescriptions, key = { "p-${it.id}" }) { prescription ->
                             val linked = state.linkedTaskIdsByPrescription[prescription.id]
                                 .orEmpty()
+                            val visitTitle = prescription.sourceAnalysisId?.let {
+                                state.analysisTitleById[it]
+                            }
                             PrescriptionRow(
                                 prescription = prescription,
                                 hasLinkedTasks = linked.isNotEmpty(),
+                                sourceVisitTitle = visitTitle,
                                 onClick = {
                                     dialog = HealthDialog.EditPrescription(prescription)
                                 },
@@ -305,16 +319,16 @@ fun HealthScreen(viewModel: HealthViewModel) {
         HealthDialog.AddAnalysis -> AnalysisEditorSheet(
             state = AnalysisEditorState.Create,
             onDismiss = { dialog = null },
-            onSave = { title, status, planned, done, comment ->
-                viewModel.addAnalysis(title, status, planned, done, comment)
+            onSave = { kind, title, status, planned, done, comment ->
+                viewModel.addAnalysis(kind, title, status, planned, done, comment)
                 dialog = null
             }
         )
         is HealthDialog.EditAnalysis -> AnalysisEditorSheet(
             state = AnalysisEditorState.Edit(d.analysis),
             onDismiss = { dialog = null },
-            onSave = { title, status, planned, done, comment ->
-                viewModel.updateAnalysis(d.analysis, title, status, planned, done, comment)
+            onSave = { kind, title, status, planned, done, comment ->
+                viewModel.updateAnalysis(d.analysis, kind, title, status, planned, done, comment)
                 dialog = null
             },
             onDelete = {
@@ -325,9 +339,32 @@ fun HealthScreen(viewModel: HealthViewModel) {
         HealthDialog.AddPrescription -> PrescriptionEditorSheet(
             state = PrescriptionEditorState.Create,
             hasLinkedTasks = false,
+            doctorVisits = state.doctorVisits,
             onDismiss = { dialog = null },
-            onSave = { type, title, dosage, comment, start, end, visit ->
-                viewModel.addPrescription(type, title, dosage, comment, start, end, visit)
+            onSave = { type, title, dosage, comment, start, end, visit, sourceAnalysisId ->
+                viewModel.addPrescription(
+                    type, title, dosage, comment, start, end, visit, sourceAnalysisId
+                )
+                dialog = null
+            }
+        )
+        is HealthDialog.AddPrescriptionForVisit -> PrescriptionEditorSheet(
+            state = PrescriptionEditorState.Create,
+            hasLinkedTasks = false,
+            doctorVisits = state.doctorVisits,
+            lockedSourceAnalysisId = d.visit.id,
+            onDismiss = { dialog = null },
+            onSave = { type, title, dosage, comment, start, end, visit, sourceAnalysisId ->
+                viewModel.addPrescription(
+                    type,
+                    title,
+                    dosage,
+                    comment,
+                    start,
+                    end,
+                    visit,
+                    sourceAnalysisId ?: d.visit.id
+                )
                 dialog = null
             }
         )
@@ -336,10 +373,19 @@ fun HealthScreen(viewModel: HealthViewModel) {
             hasLinkedTasks = state.linkedTaskIdsByPrescription[d.prescription.id]
                 .orEmpty()
                 .isNotEmpty(),
+            doctorVisits = state.doctorVisits,
             onDismiss = { dialog = null },
-            onSave = { type, title, dosage, comment, start, end, visit ->
+            onSave = { type, title, dosage, comment, start, end, visit, sourceAnalysisId ->
                 viewModel.updatePrescription(
-                    d.prescription, type, title, dosage, comment, start, end, visit
+                    d.prescription,
+                    type,
+                    title,
+                    dosage,
+                    comment,
+                    start,
+                    end,
+                    visit,
+                    sourceAnalysisId
                 )
                 dialog = null
             },
@@ -376,7 +422,7 @@ fun HealthScreen(viewModel: HealthViewModel) {
             title = { Text("Удалить человека?") },
             text = {
                 Text(
-                    "Удалить «${d.person.name}» и все анализы и назначения? " +
+                    "Удалить «${d.person.name}» и все анализы/врачей и назначения? " +
                         "Задачи в списке дел останутся."
                 )
             },
@@ -469,7 +515,8 @@ private fun SectionHeader(
 @Composable
 private fun AnalysisRow(
     analysis: HealthAnalysisEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onAddPrescription: (() -> Unit)? = null
 ) {
     val today = DateUtils.todayEpochDay()
     val overdue = analysis.status == HealthAnalysisStatus.PLANNED &&
@@ -481,29 +528,42 @@ private fun AnalysisRow(
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp)
     ) {
-        Text(
-            analysis.title,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        val subtitle = buildString {
-            append(analysis.status.label)
-            if (overdue) append(" · просрочен")
-            analysis.plannedDateEpochDay?.let {
-                append(" · ")
-                append(DateUtils.formatShort(it))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    analysis.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val subtitle = buildString {
+                    append(analysis.kind.label)
+                    append(" · ")
+                    append(analysis.status.labelFor(analysis.kind))
+                    if (overdue) append(" · просрочен")
+                    analysis.plannedDateEpochDay?.let {
+                        append(" · ")
+                        append(DateUtils.formatShort(it))
+                    }
+                }
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (overdue) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+            if (onAddPrescription != null) {
+                TextButton(onClick = onAddPrescription) { Text("Назначение") }
             }
         }
-        Text(
-            subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (overdue) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-        )
     }
 }
 
@@ -511,6 +571,7 @@ private fun AnalysisRow(
 private fun PrescriptionRow(
     prescription: HealthPrescriptionEntity,
     hasLinkedTasks: Boolean,
+    sourceVisitTitle: String?,
     onClick: () -> Unit,
     onCreateTask: () -> Unit
 ) {
@@ -545,6 +606,10 @@ private fun PrescriptionRow(
                             append(" · ")
                             append(DateUtils.formatShort(it))
                         }
+                    }
+                    if (!sourceVisitTitle.isNullOrBlank()) {
+                        append(" · приём: ")
+                        append(sourceVisitTitle)
                     }
                     if (hasLinkedTasks) append(" · есть задача")
                 }

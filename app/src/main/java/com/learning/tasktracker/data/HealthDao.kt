@@ -30,6 +30,9 @@ interface HealthDao {
     @Query("SELECT * FROM health_analyses ORDER BY status ASC, plannedDateEpochDay ASC, createdAt DESC")
     fun observeAnalyses(): Flow<List<HealthAnalysisEntity>>
 
+    @Query("SELECT * FROM health_analyses WHERE id = :id LIMIT 1")
+    suspend fun getAnalysis(id: Long): HealthAnalysisEntity?
+
     @Insert
     suspend fun insertAnalysis(analysis: HealthAnalysisEntity): Long
 

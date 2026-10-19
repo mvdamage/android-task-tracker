@@ -42,12 +42,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.HealthAnalysisEntity
+import com.learning.tasktracker.data.HealthAnalysisKind
 import com.learning.tasktracker.data.HealthAnalysisStatus
 import com.learning.tasktracker.data.HealthPersonEntity
 import com.learning.tasktracker.data.HealthPrescriptionEntity
 import com.learning.tasktracker.data.HealthPrescriptionType
 import com.learning.tasktracker.data.HealthRules
 import com.learning.tasktracker.data.RecurrenceType
+import com.learning.tasktracker.data.labelFor
 import com.learning.tasktracker.ui.components.EditorSectionTitle
 import java.time.Instant
 import java.time.ZoneOffset
@@ -152,6 +154,7 @@ internal fun AnalysisEditorSheet(
     state: AnalysisEditorState,
     onDismiss: () -> Unit,
     onSave: (
+        kind: HealthAnalysisKind,
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
@@ -162,6 +165,9 @@ internal fun AnalysisEditorSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val existing = (state as? AnalysisEditorState.Edit)?.analysis
+    var kind by remember(state) {
+        mutableStateOf(existing?.kind ?: HealthAnalysisKind.LAB)
+    }
     var title by remember(state) { mutableStateOf(existing?.title.orEmpty()) }
     var status by remember(state) {
         mutableStateOf(existing?.status ?: HealthAnalysisStatus.PLANNED)
@@ -171,6 +177,15 @@ internal fun AnalysisEditorSheet(
     var comment by remember(state) { mutableStateOf(existing?.comment.orEmpty()) }
     var pickingPlanned by remember { mutableStateOf(false) }
     var pickingDone by remember { mutableStateOf(false) }
+    val titleLabel = if (kind == HealthAnalysisKind.DOCTOR) "Врач / приём" else "Название"
+    val plannedLabel = if (kind == HealthAnalysisKind.DOCTOR) "Дата приёма" else "Плановая дата"
+    val doneLabel = if (kind == HealthAnalysisKind.DOCTOR) "Дата визита" else "Дата сдачи"
+    val sheetTitle = when {
+        existing == null && kind == HealthAnalysisKind.DOCTOR -> "Новый приём"
+        existing == null -> "Новый анализ"
+        kind == HealthAnalysisKind.DOCTOR -> "Приём врача"
+        else -> "Анализ"
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -188,7 +203,7 @@ internal fun AnalysisEditorSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    if (existing == null) "Новый анализ" else "Анализ",
+                    sheetTitle,
                     style = MaterialTheme.typography.titleLarge
                 )
                 Row {
@@ -199,7 +214,7 @@ internal fun AnalysisEditorSheet(
                     }
                     TextButton(onClick = onDismiss) { Text("Отмена") }
                     IconButton(
-                        onClick = { onSave(title, status, plannedDate, doneDate, comment) },
+                        onClick = { onSave(kind, title, status, plannedDate, doneDate, comment) },
                         enabled = title.isNotBlank()
                     ) {
                         Icon(
@@ -214,11 +229,22 @@ internal fun AnalysisEditorSheet(
                     }
                 }
             }
+            EditorSectionTitle("Тип")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HealthAnalysisKind.entries.forEach { option ->
+                    FilterChip(
+                        selected = kind == option,
+                        onClick = { kind = option },
+                        label = { Text(option.label) }
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Название") },
+                label = { Text(titleLabel) },
                 singleLine = true,
                 colors = healthFieldColors()
             )
@@ -234,22 +260,22 @@ internal fun AnalysisEditorSheet(
                                 doneDate = DateUtils.todayEpochDay()
                             }
                         },
-                        label = { Text(option.label) }
+                        label = { Text(option.labelFor(kind)) }
                     )
                 }
             }
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = { pickingPlanned = true }) {
                 Text(
-                    plannedDate?.let { "Плановая дата: ${DateUtils.formatShort(it)}" }
-                        ?: "Плановая дата"
+                    plannedDate?.let { "$plannedLabel: ${DateUtils.formatShort(it)}" }
+                        ?: plannedLabel
                 )
             }
             if (status == HealthAnalysisStatus.DONE) {
                 TextButton(onClick = { pickingDone = true }) {
                     Text(
-                        doneDate?.let { "Дата сдачи: ${DateUtils.formatShort(it)}" }
-                            ?: "Дата сдачи"
+                        doneDate?.let { "$doneLabel: ${DateUtils.formatShort(it)}" }
+                            ?: doneLabel
                     )
                 }
             }
@@ -292,6 +318,8 @@ internal fun AnalysisEditorSheet(
 internal fun PrescriptionEditorSheet(
     state: PrescriptionEditorState,
     hasLinkedTasks: Boolean,
+    doctorVisits: List<HealthAnalysisEntity> = emptyList(),
+    lockedSourceAnalysisId: Long? = null,
     onDismiss: () -> Unit,
     onSave: (
         type: HealthPrescriptionType,
@@ -300,7 +328,8 @@ internal fun PrescriptionEditorSheet(
         comment: String,
         startDateEpochDay: Long?,
         endDateEpochDay: Long?,
-        visitDateEpochDay: Long?
+        visitDateEpochDay: Long?,
+        sourceAnalysisId: Long?
     ) -> Unit,
     onDelete: ((HealthPrescriptionEntity) -> Unit)? = null,
     onCreateTask: ((HealthPrescriptionEntity) -> Unit)? = null
@@ -316,7 +345,13 @@ internal fun PrescriptionEditorSheet(
     var startDate by remember(state) { mutableStateOf(existing?.startDateEpochDay) }
     var endDate by remember(state) { mutableStateOf(existing?.endDateEpochDay) }
     var visitDate by remember(state) { mutableStateOf(existing?.visitDateEpochDay) }
+    var sourceAnalysisId by remember(state, lockedSourceAnalysisId) {
+        mutableStateOf(lockedSourceAnalysisId ?: existing?.sourceAnalysisId)
+    }
     var picking by remember { mutableStateOf<String?>(null) }
+    val lockedVisit = lockedSourceAnalysisId?.let { id ->
+        doctorVisits.firstOrNull { it.id == id }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -346,7 +381,16 @@ internal fun PrescriptionEditorSheet(
                     TextButton(onClick = onDismiss) { Text("Отмена") }
                     IconButton(
                         onClick = {
-                            onSave(type, title, dosage, comment, startDate, endDate, visitDate)
+                            onSave(
+                                type,
+                                title,
+                                dosage,
+                                comment,
+                                startDate,
+                                endDate,
+                                visitDate,
+                                sourceAnalysisId
+                            )
                         },
                         enabled = title.isNotBlank()
                     ) {
@@ -362,6 +406,14 @@ internal fun PrescriptionEditorSheet(
                     }
                 }
             }
+            if (lockedVisit != null) {
+                Text(
+                    "По приёму: ${lockedVisit.title}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
             EditorSectionTitle("Тип")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 HealthPrescriptionType.entries.forEach { option ->
@@ -370,6 +422,26 @@ internal fun PrescriptionEditorSheet(
                         onClick = { type = option },
                         label = { Text(option.label) }
                     )
+                }
+            }
+            if (lockedSourceAnalysisId == null && doctorVisits.isNotEmpty() &&
+                type == HealthPrescriptionType.MEDICATION
+            ) {
+                Spacer(Modifier.height(8.dp))
+                EditorSectionTitle("Приём врача")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = sourceAnalysisId == null,
+                        onClick = { sourceAnalysisId = null },
+                        label = { Text("Без привязки") }
+                    )
+                    doctorVisits.forEach { visit ->
+                        FilterChip(
+                            selected = sourceAnalysisId == visit.id,
+                            onClick = { sourceAnalysisId = visit.id },
+                            label = { Text(visit.title) }
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))

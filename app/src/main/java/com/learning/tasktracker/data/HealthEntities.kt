@@ -29,6 +29,7 @@ data class HealthPersonEntity(
 data class HealthAnalysisEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val personId: Long,
+    val kind: HealthAnalysisKind = HealthAnalysisKind.LAB,
     val title: String,
     val status: HealthAnalysisStatus = HealthAnalysisStatus.PLANNED,
     val plannedDateEpochDay: Long? = null,
@@ -46,9 +47,15 @@ data class HealthAnalysisEntity(
             parentColumns = ["id"],
             childColumns = ["personId"],
             onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = HealthAnalysisEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["sourceAnalysisId"],
+            onDelete = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index("personId")]
+    indices = [Index("personId"), Index("sourceAnalysisId")]
 )
 data class HealthPrescriptionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -60,6 +67,8 @@ data class HealthPrescriptionEntity(
     val startDateEpochDay: Long? = null,
     val endDateEpochDay: Long? = null,
     val visitDateEpochDay: Long? = null,
+    /** Doctor visit (analysis with kind=DOCTOR) this prescription belongs to. */
+    val sourceAnalysisId: Long? = null,
     val archived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()

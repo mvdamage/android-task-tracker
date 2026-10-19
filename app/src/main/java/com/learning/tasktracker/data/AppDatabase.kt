@@ -41,6 +41,13 @@ class Converters {
     fun toNoteTheme(value: String): NoteTheme = NoteTheme.valueOf(value)
 
     @TypeConverter
+    fun fromHealthAnalysisKind(value: HealthAnalysisKind): String = value.name
+
+    @TypeConverter
+    fun toHealthAnalysisKind(value: String): HealthAnalysisKind =
+        HealthAnalysisKind.valueOf(value)
+
+    @TypeConverter
     fun fromHealthAnalysisStatus(value: HealthAnalysisStatus): String = value.name
 
     @TypeConverter
@@ -68,7 +75,7 @@ class Converters {
         HealthPrescriptionEntity::class,
         HealthPrescriptionTaskLinkEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -339,6 +346,59 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE health_analyses ADD COLUMN kind TEXT NOT NULL DEFAULT 'LAB'"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS health_prescriptions_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        personId INTEGER NOT NULL,
+                        type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        dosage TEXT NOT NULL,
+                        comment TEXT NOT NULL,
+                        startDateEpochDay INTEGER,
+                        endDateEpochDay INTEGER,
+                        visitDateEpochDay INTEGER,
+                        sourceAnalysisId INTEGER,
+                        archived INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(personId) REFERENCES health_persons(id) ON DELETE CASCADE,
+                        FOREIGN KEY(sourceAnalysisId) REFERENCES health_analyses(id) ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO health_prescriptions_new (
+                        id, personId, type, title, dosage, comment,
+                        startDateEpochDay, endDateEpochDay, visitDateEpochDay,
+                        sourceAnalysisId, archived, createdAt, updatedAt
+                    )
+                    SELECT
+                        id, personId, type, title, dosage, comment,
+                        startDateEpochDay, endDateEpochDay, visitDateEpochDay,
+                        NULL, archived, createdAt, updatedAt
+                    FROM health_prescriptions
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE health_prescriptions")
+                db.execSQL("ALTER TABLE health_prescriptions_new RENAME TO health_prescriptions")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_health_prescriptions_personId " +
+                        "ON health_prescriptions(personId)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_health_prescriptions_sourceAnalysisId " +
+                        "ON health_prescriptions(sourceAnalysisId)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -355,7 +415,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_10_11,
             MIGRATION_11_12,
             MIGRATION_12_13,
-            MIGRATION_13_14
+            MIGRATION_13_14,
+            MIGRATION_14_15
         )
 
         fun get(context: Context): AppDatabase {

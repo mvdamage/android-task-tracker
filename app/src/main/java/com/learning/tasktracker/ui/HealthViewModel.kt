@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.learning.tasktracker.data.HealthAnalysisEntity
+import com.learning.tasktracker.data.HealthAnalysisKind
 import com.learning.tasktracker.data.HealthAnalysisStatus
 import com.learning.tasktracker.data.HealthPersonEntity
 import com.learning.tasktracker.data.HealthPrescriptionEntity
@@ -23,7 +24,9 @@ data class HealthUiState(
     val selectedPersonId: Long? = null,
     val selectedPerson: HealthPersonEntity? = null,
     val analyses: List<HealthAnalysisEntity> = emptyList(),
+    val doctorVisits: List<HealthAnalysisEntity> = emptyList(),
     val prescriptions: List<HealthPrescriptionEntity> = emptyList(),
+    val analysisTitleById: Map<Long, String> = emptyMap(),
     val linkedTaskIdsByPrescription: Map<Long, List<Long>> = emptyMap(),
     val canAddPerson: Boolean = true
 )
@@ -46,7 +49,8 @@ class HealthViewModel(
         val personAnalyses = snapshot.analyses
             .filter { it.personId == resolvedId }
             .sortedWith(
-                compareBy<HealthAnalysisEntity> { it.status != HealthAnalysisStatus.PLANNED }
+                compareBy<HealthAnalysisEntity> { it.kind != HealthAnalysisKind.DOCTOR }
+                    .thenBy { it.status != HealthAnalysisStatus.PLANNED }
                     .thenBy { it.plannedDateEpochDay ?: Long.MAX_VALUE }
                     .thenByDescending { it.createdAt }
             )
@@ -56,7 +60,9 @@ class HealthViewModel(
             selectedPersonId = resolvedId,
             selectedPerson = persons.firstOrNull { it.id == resolvedId },
             analyses = personAnalyses,
+            doctorVisits = personAnalyses.filter { it.kind == HealthAnalysisKind.DOCTOR },
             prescriptions = personPrescriptions,
+            analysisTitleById = personAnalyses.associate { it.id to it.title },
             linkedTaskIdsByPrescription = snapshot.links.groupBy({ it.prescriptionId }, { it.taskId }),
             canAddPerson = HealthRules.canAddPerson(persons.size)
         )
@@ -87,6 +93,7 @@ class HealthViewModel(
     }
 
     fun addAnalysis(
+        kind: HealthAnalysisKind,
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
@@ -97,6 +104,7 @@ class HealthViewModel(
         viewModelScope.launch {
             repository.addAnalysis(
                 personId = personId,
+                kind = kind,
                 title = title,
                 status = status,
                 plannedDateEpochDay = plannedDateEpochDay,
@@ -108,6 +116,7 @@ class HealthViewModel(
 
     fun updateAnalysis(
         analysis: HealthAnalysisEntity,
+        kind: HealthAnalysisKind,
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
@@ -116,7 +125,7 @@ class HealthViewModel(
     ) {
         viewModelScope.launch {
             repository.updateAnalysis(
-                analysis, title, status, plannedDateEpochDay, doneDateEpochDay, comment
+                analysis, kind, title, status, plannedDateEpochDay, doneDateEpochDay, comment
             )
         }
     }
@@ -132,7 +141,8 @@ class HealthViewModel(
         comment: String,
         startDateEpochDay: Long?,
         endDateEpochDay: Long?,
-        visitDateEpochDay: Long?
+        visitDateEpochDay: Long?,
+        sourceAnalysisId: Long? = null
     ) {
         val personId = selectedPersonId.value ?: return
         viewModelScope.launch {
@@ -144,7 +154,8 @@ class HealthViewModel(
                 comment = comment,
                 startDateEpochDay = startDateEpochDay,
                 endDateEpochDay = endDateEpochDay,
-                visitDateEpochDay = visitDateEpochDay
+                visitDateEpochDay = visitDateEpochDay,
+                sourceAnalysisId = sourceAnalysisId
             )
         }
     }
@@ -157,7 +168,8 @@ class HealthViewModel(
         comment: String,
         startDateEpochDay: Long?,
         endDateEpochDay: Long?,
-        visitDateEpochDay: Long?
+        visitDateEpochDay: Long?,
+        sourceAnalysisId: Long? = prescription.sourceAnalysisId
     ) {
         viewModelScope.launch {
             repository.updatePrescription(
@@ -168,7 +180,8 @@ class HealthViewModel(
                 comment,
                 startDateEpochDay,
                 endDateEpochDay,
-                visitDateEpochDay
+                visitDateEpochDay,
+                sourceAnalysisId = sourceAnalysisId
             )
         }
     }

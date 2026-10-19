@@ -55,6 +55,7 @@ class HealthRepository(
 
     suspend fun addAnalysis(
         personId: Long,
+        kind: HealthAnalysisKind = HealthAnalysisKind.LAB,
         title: String,
         status: HealthAnalysisStatus = HealthAnalysisStatus.PLANNED,
         plannedDateEpochDay: Long? = null,
@@ -71,6 +72,7 @@ class HealthRepository(
         return dao.insertAnalysis(
             HealthAnalysisEntity(
                 personId = personId,
+                kind = kind,
                 title = normalized,
                 status = status,
                 plannedDateEpochDay = plannedDateEpochDay,
@@ -84,6 +86,7 @@ class HealthRepository(
 
     suspend fun updateAnalysis(
         analysis: HealthAnalysisEntity,
+        kind: HealthAnalysisKind,
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
@@ -97,6 +100,7 @@ class HealthRepository(
         }
         dao.updateAnalysis(
             analysis.copy(
+                kind = kind,
                 title = normalized,
                 status = status,
                 plannedDateEpochDay = plannedDateEpochDay,
@@ -119,10 +123,12 @@ class HealthRepository(
         comment: String = "",
         startDateEpochDay: Long? = null,
         endDateEpochDay: Long? = null,
-        visitDateEpochDay: Long? = null
+        visitDateEpochDay: Long? = null,
+        sourceAnalysisId: Long? = null
     ): Long {
         val normalized = HealthRules.normalizeTitle(title) ?: return -1L
         if (dao.getPerson(personId) == null) return -1L
+        val linkedVisitId = resolveDoctorVisitId(personId, sourceAnalysisId)
         val now = System.currentTimeMillis()
         return dao.insertPrescription(
             HealthPrescriptionEntity(
@@ -134,6 +140,7 @@ class HealthRepository(
                 startDateEpochDay = startDateEpochDay,
                 endDateEpochDay = endDateEpochDay,
                 visitDateEpochDay = if (type == HealthPrescriptionType.VISIT) visitDateEpochDay else null,
+                sourceAnalysisId = linkedVisitId,
                 createdAt = now,
                 updatedAt = now
             )
@@ -149,9 +156,11 @@ class HealthRepository(
         startDateEpochDay: Long?,
         endDateEpochDay: Long?,
         visitDateEpochDay: Long?,
+        sourceAnalysisId: Long? = prescription.sourceAnalysisId,
         archived: Boolean = prescription.archived
     ) {
         val normalized = HealthRules.normalizeTitle(title) ?: return
+        val linkedVisitId = resolveDoctorVisitId(prescription.personId, sourceAnalysisId)
         dao.updatePrescription(
             prescription.copy(
                 type = type,
@@ -161,10 +170,19 @@ class HealthRepository(
                 startDateEpochDay = startDateEpochDay,
                 endDateEpochDay = endDateEpochDay,
                 visitDateEpochDay = if (type == HealthPrescriptionType.VISIT) visitDateEpochDay else null,
+                sourceAnalysisId = linkedVisitId,
                 archived = archived,
                 updatedAt = System.currentTimeMillis()
             )
         )
+    }
+
+    private suspend fun resolveDoctorVisitId(personId: Long, sourceAnalysisId: Long?): Long? {
+        if (sourceAnalysisId == null) return null
+        val analysis = dao.getAnalysis(sourceAnalysisId) ?: return null
+        if (analysis.personId != personId) return null
+        if (analysis.kind != HealthAnalysisKind.DOCTOR) return null
+        return analysis.id
     }
 
     suspend fun archivePrescription(prescription: HealthPrescriptionEntity) {
