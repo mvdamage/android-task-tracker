@@ -23,7 +23,9 @@ class TaskRepository(
         dueTimeEndMinutes: Int? = null,
         kind: TaskKind = TaskKind.TASK,
         location: String = ""
-    ) {
+    ): Long {
+        val trimmedTitle = title.trim()
+        if (trimmedTitle.isEmpty()) return -1L
         val normalized = TaskKindRules.normalize(
             kind = kind,
             priority = priority,
@@ -44,9 +46,9 @@ class TaskRepository(
             normalized.dueTimeMinutes,
             normalized.dueTimeEndMinutes
         )
-        dao.insert(
+        return dao.insert(
             TaskEntity(
-                title = title.trim(),
+                title = trimmedTitle,
                 notes = notes.trim(),
                 location = normalized.location,
                 priority = normalized.priority,

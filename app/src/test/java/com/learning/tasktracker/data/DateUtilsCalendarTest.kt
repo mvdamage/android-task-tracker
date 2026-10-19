@@ -28,4 +28,13 @@ class DateUtilsCalendarTest {
         val october = DateUtils.shiftMonth(september, 1)
         assertEquals(LocalDate.of(2025, 10, 1).toEpochDay(), october)
     }
+
+    @Test
+    fun listHorizon_includesCurrentAndNextMonthOnly() {
+        val today = LocalDate.of(2026, 3, 15).toEpochDay()
+        assertEquals(true, DateUtils.isWithinListHorizon(LocalDate.of(2026, 3, 1).toEpochDay(), today))
+        assertEquals(true, DateUtils.isWithinListHorizon(LocalDate.of(2026, 4, 30).toEpochDay(), today))
+        assertEquals(false, DateUtils.isWithinListHorizon(LocalDate.of(2026, 2, 28).toEpochDay(), today))
+        assertEquals(false, DateUtils.isWithinListHorizon(LocalDate.of(2026, 5, 1).toEpochDay(), today))
+    }
 }

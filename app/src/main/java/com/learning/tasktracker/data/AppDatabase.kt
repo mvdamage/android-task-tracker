@@ -39,6 +39,20 @@ class Converters {
 
     @TypeConverter
     fun toNoteTheme(value: String): NoteTheme = NoteTheme.valueOf(value)
+
+    @TypeConverter
+    fun fromHealthAnalysisStatus(value: HealthAnalysisStatus): String = value.name
+
+    @TypeConverter
+    fun toHealthAnalysisStatus(value: String): HealthAnalysisStatus =
+        HealthAnalysisStatus.valueOf(value)
+
+    @TypeConverter
+    fun fromHealthPrescriptionType(value: HealthPrescriptionType): String = value.name
+
+    @TypeConverter
+    fun toHealthPrescriptionType(value: String): HealthPrescriptionType =
+        HealthPrescriptionType.valueOf(value)
 }
 
 @Database(
@@ -48,9 +62,13 @@ class Converters {
         ShoppingCategoryEntity::class,
         SubtaskEntity::class,
         NoteEntity::class,
-        NoteListItemEntity::class
+        NoteListItemEntity::class,
+        HealthPersonEntity::class,
+        HealthAnalysisEntity::class,
+        HealthPrescriptionEntity::class,
+        HealthPrescriptionTaskLinkEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -59,6 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun shoppingDao(): ShoppingDao
     abstract fun subtaskDao(): SubtaskDao
     abstract fun noteDao(): NoteDao
+    abstract fun healthDao(): HealthDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -246,6 +265,80 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS health_persons (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        note TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS health_analyses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        personId INTEGER NOT NULL,
+                        title TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        plannedDateEpochDay INTEGER,
+                        doneDateEpochDay INTEGER,
+                        comment TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(personId) REFERENCES health_persons(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_health_analyses_personId ON health_analyses(personId)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS health_prescriptions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        personId INTEGER NOT NULL,
+                        type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        dosage TEXT NOT NULL,
+                        comment TEXT NOT NULL,
+                        startDateEpochDay INTEGER,
+                        endDateEpochDay INTEGER,
+                        visitDateEpochDay INTEGER,
+                        archived INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(personId) REFERENCES health_persons(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_health_prescriptions_personId ON health_prescriptions(personId)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS health_prescription_task_links (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        prescriptionId INTEGER NOT NULL,
+                        taskId INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        FOREIGN KEY(prescriptionId) REFERENCES health_prescriptions(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_health_prescription_task_links_prescriptionId ON health_prescription_task_links(prescriptionId)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_health_prescription_task_links_taskId ON health_prescription_task_links(taskId)"
+                )
+            }
+        }
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -261,7 +354,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_9_10,
             MIGRATION_10_11,
             MIGRATION_11_12,
-            MIGRATION_12_13
+            MIGRATION_12_13,
+            MIGRATION_13_14
         )
 
         fun get(context: Context): AppDatabase {

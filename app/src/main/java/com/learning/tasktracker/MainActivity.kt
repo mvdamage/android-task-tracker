@@ -9,6 +9,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.learning.tasktracker.ui.HealthViewModel
 import com.learning.tasktracker.ui.MainScreen
 import com.learning.tasktracker.ui.NotesViewModel
 import com.learning.tasktracker.ui.ShoppingViewModel
@@ -28,6 +29,9 @@ class MainActivity : ComponentActivity() {
                 val notesViewModel: NotesViewModel = viewModel(
                     factory = NotesViewModel.Factory(app.notesRepository)
                 )
+                val healthViewModel: HealthViewModel = viewModel(
+                    factory = HealthViewModel.Factory(app.healthRepository)
+                )
                 val shoppingViewModel: ShoppingViewModel = viewModel(
                     factory = ShoppingViewModel.Factory(app.shoppingRepository)
                 )
@@ -44,6 +48,7 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     taskViewModel = taskViewModel,
                     notesViewModel = notesViewModel,
+                    healthViewModel = healthViewModel,
                     shoppingViewModel = shoppingViewModel
                 )
             }

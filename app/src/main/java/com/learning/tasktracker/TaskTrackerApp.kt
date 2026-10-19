@@ -3,6 +3,7 @@ package com.learning.tasktracker
 import android.app.Application
 import com.learning.tasktracker.data.AppDatabase
 import com.learning.tasktracker.data.DayRolloverStore
+import com.learning.tasktracker.data.HealthRepository
 import com.learning.tasktracker.data.NotesRepository
 import com.learning.tasktracker.data.SettingsStore
 import com.learning.tasktracker.data.ShoppingRepository
@@ -16,6 +17,9 @@ class TaskTrackerApp : Application() {
         private set
 
     lateinit var notesRepository: NotesRepository
+        private set
+
+    lateinit var healthRepository: HealthRepository
         private set
 
     lateinit var settingsStore: SettingsStore
@@ -32,5 +36,9 @@ class TaskTrackerApp : Application() {
         )
         shoppingRepository = ShoppingRepository(dao = db.shoppingDao())
         notesRepository = NotesRepository(dao = db.noteDao())
+        healthRepository = HealthRepository(
+            dao = db.healthDao(),
+            taskRepository = repository
+        )
     }
 }

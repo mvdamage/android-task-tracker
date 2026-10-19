@@ -31,6 +31,28 @@ data class TaskGroup(
     val groupKey: Long get() = DateUtils.toGroupKey(dueDateEpochDay)
 }
 
+/** Events/birthdays appear in the task list only within the current + next month. */
+internal fun TaskEntity.visibleInTaskList(today: Long = DateUtils.todayEpochDay()): Boolean {
+    return when (kind) {
+        TaskKind.TASK -> true
+        TaskKind.EVENT, TaskKind.BIRTHDAY -> {
+            val due = dueDateEpochDay ?: return false
+            DateUtils.isWithinListHorizon(due, today)
+        }
+    }
+}
+
+/** Calendar shows every future event/birthday (today and later), with no month cap. */
+internal fun TaskEntity.visibleInCalendar(today: Long = DateUtils.todayEpochDay()): Boolean {
+    return when (kind) {
+        TaskKind.TASK -> true
+        TaskKind.EVENT, TaskKind.BIRTHDAY -> {
+            val due = dueDateEpochDay ?: return false
+            due >= today
+        }
+    }
+}
+
 data class TaskUiState(
     val groups: List<TaskGroup> = emptyList(),
     val filter: TaskFilter = TaskFilter.ALL,
@@ -106,7 +128,11 @@ class TaskViewModel(
             TaskFilter.ACTIVE -> tasks.filter { !it.isDone }
             TaskFilter.DONE -> tasks.filter { it.isDone }
         }
-        val groups = filtered
+        // List: events/birthdays only for current + next month.
+        // Calendar: all future events/birthdays (no two-month cap).
+        val listFiltered = filtered.filter { it.visibleInTaskList(today) }
+        val calendarFiltered = filtered.filter { it.visibleInCalendar(today) }
+        val groups = listFiltered
             .groupBy { it.dueDateEpochDay }
             .entries
             .sortedBy { (day, _) -> DateUtils.groupSortKey(day) }
@@ -117,15 +143,15 @@ class TaskViewModel(
                     tasks = dayTasks
                 )
             }
-        val taskCountByDay = filtered
+        val taskCountByDay = calendarFiltered
             .mapNotNull { task -> task.dueDateEpochDay?.let { it to task } }
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, dayTasks) -> dayTasks.size }
-        val undatedCount = filtered.count { it.dueDateEpochDay == null }
+        val undatedCount = calendarFiltered.count { it.dueDateEpochDay == null }
         val calendarDayTasks = if (selectedDayKey == DateUtils.UNDATED_GROUP_KEY) {
-            filtered.filter { it.dueDateEpochDay == null }
+            calendarFiltered.filter { it.dueDateEpochDay == null }
         } else {
-            filtered.filter { it.dueDateEpochDay == selectedDayKey }
+            calendarFiltered.filter { it.dueDateEpochDay == selectedDayKey }
         }
         val calendarSelectedTitle = if (selectedDayKey == DateUtils.UNDATED_GROUP_KEY) {
             "Без даты"

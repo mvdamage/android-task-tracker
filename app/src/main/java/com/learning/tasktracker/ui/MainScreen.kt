@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.automirrored.outlined.Notes
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Badge
@@ -40,6 +42,7 @@ private enum class AppTab(
 ) {
     TASKS("Задачи", Icons.Outlined.TaskAlt, Icons.Filled.TaskAlt),
     NOTES("Заметки", Icons.AutoMirrored.Outlined.Notes, Icons.AutoMirrored.Filled.Notes),
+    HEALTH("Здоровье", Icons.Outlined.FavoriteBorder, Icons.Filled.Favorite),
     SHOPPING("Покупки", Icons.Outlined.ShoppingCart, Icons.Filled.ShoppingCart)
 }
 
@@ -47,6 +50,7 @@ private enum class AppTab(
 fun MainScreen(
     taskViewModel: TaskViewModel,
     notesViewModel: NotesViewModel,
+    healthViewModel: HealthViewModel,
     shoppingViewModel: ShoppingViewModel
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TASKS) }
@@ -64,6 +68,7 @@ fun MainScreen(
                     val tabTag = when (tab) {
                         AppTab.TASKS -> TestTags.TAB_TASKS
                         AppTab.NOTES -> TestTags.TAB_NOTES
+                        AppTab.HEALTH -> TestTags.TAB_HEALTH
                         AppTab.SHOPPING -> TestTags.TAB_SHOPPING
                     }
                     NavigationBarItem(
@@ -114,6 +119,7 @@ fun MainScreen(
                 when (tab) {
                     AppTab.TASKS -> TaskTrackerScreen(viewModel = taskViewModel)
                     AppTab.NOTES -> NotesScreen(viewModel = notesViewModel)
+                    AppTab.HEALTH -> HealthScreen(viewModel = healthViewModel)
                     AppTab.SHOPPING -> ShoppingListScreen(viewModel = shoppingViewModel)
                 }
             }

@@ -8,6 +8,7 @@ import com.learning.tasktracker.data.DayRolloverStore
 import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SettingsStore
+import com.learning.tasktracker.data.TaskKind
 import com.learning.tasktracker.data.TaskRepository
 import com.learning.tasktracker.data.TaskViewMode
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -84,5 +86,49 @@ class TaskCalendarViewModelTest {
         assertEquals(1, state.calendarDayTasks.size)
         assertEquals("Buy milk", state.calendarDayTasks.first().title)
         assertEquals(1, state.taskCountByDay[day])
+    }
+
+    @Test
+    fun listHidesFarFutureEvents_calendarKeepsThem() = runTest(dispatcher) {
+        val today = DateUtils.todayEpochDay()
+        val near = DateUtils.shiftMonth(DateUtils.firstDayOfMonth(today), 1) + 5
+        val far = DateUtils.shiftMonth(DateUtils.firstDayOfMonth(today), 3) + 5
+
+        taskRepo.add(
+            title = "Near event",
+            notes = "",
+            priority = Priority.MEDIUM,
+            dueDateEpochDay = near,
+            kind = TaskKind.EVENT
+        )
+        taskRepo.add(
+            title = "Far birthday",
+            notes = "",
+            priority = Priority.MEDIUM,
+            dueDateEpochDay = far,
+            kind = TaskKind.BIRTHDAY
+        )
+        taskRepo.add(
+            title = "Far task",
+            notes = "",
+            priority = Priority.MEDIUM,
+            dueDateEpochDay = far
+        )
+
+        val listState = taskVm.uiState.first { it.groups.isNotEmpty() }
+        val listTitles = listState.groups.flatMap { it.tasks }.map { it.title }.toSet()
+        assertTrue(listTitles.contains("Near event"))
+        assertTrue(listTitles.contains("Far task"))
+        assertTrue(!listTitles.contains("Far birthday"))
+
+        taskVm.setViewMode(TaskViewMode.CALENDAR)
+        taskVm.selectCalendarDay(far)
+        val calState = taskVm.uiState.first {
+            it.viewMode == TaskViewMode.CALENDAR && it.selectedCalendarDayKey == far
+        }
+        val calTitles = calState.calendarDayTasks.map { it.title }.toSet()
+        assertTrue(calTitles.contains("Far birthday"))
+        assertTrue(calTitles.contains("Far task"))
+        assertEquals(2, calState.taskCountByDay[far])
     }
 }

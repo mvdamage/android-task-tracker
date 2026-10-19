@@ -3,7 +3,12 @@ package com.learning.tasktracker.ui
 object TestTags {
     const val TAB_TASKS = "tab_tasks"
     const val TAB_NOTES = "tab_notes"
+    const val TAB_HEALTH = "tab_health"
     const val TAB_SHOPPING = "tab_shopping"
+    const val HEALTH_ADD_PERSON = "health_add_person"
+    const val HEALTH_EMPTY_ADD_PERSON = "health_empty_add_person"
+    const val HEALTH_ADD_ANALYSIS = "health_add_analysis"
+    const val HEALTH_ADD_PRESCRIPTION_FAB = "health_add_prescription_fab"
     const val QUICK_ADD_TASK = "quick_add_task"
     const val QUICK_ADD_SHOPPING = "quick_add_shopping"
     const val ADD_NOTE_FAB = "add_note_fab"

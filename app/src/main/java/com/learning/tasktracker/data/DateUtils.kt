@@ -254,4 +254,17 @@ object DateUtils {
     fun shiftMonth(monthStartEpochDay: Long, deltaMonths: Int): Long {
         return fromEpochDay(monthStartEpochDay).plusMonths(deltaMonths.toLong()).toEpochDay()
     }
+
+    /**
+     * Exclusive end of the task-list horizon for events/birthdays:
+     * current calendar month through the end of the next month.
+     */
+    fun listHorizonEndExclusive(today: Long = todayEpochDay()): Long =
+        shiftMonth(firstDayOfMonth(today), 2)
+
+    fun isWithinListHorizon(dueEpochDay: Long, today: Long = todayEpochDay()): Boolean {
+        val start = firstDayOfMonth(today)
+        val endExclusive = listHorizonEndExclusive(today)
+        return dueEpochDay >= start && dueEpochDay < endExclusive
+    }
 }
