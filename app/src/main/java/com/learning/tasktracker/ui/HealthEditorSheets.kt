@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -109,10 +110,20 @@ internal fun PersonEditorSheet(
                         }
                     }
                     TextButton(onClick = onDismiss) { Text("Отмена") }
-                    TextButton(
+                    IconButton(
                         onClick = { onSave(name, note) },
                         enabled = canSave
-                    ) { Text("Сохранить") }
+                    ) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = "Сохранить",
+                            tint = if (canSave) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
             OutlinedTextField(
@@ -187,10 +198,20 @@ internal fun AnalysisEditorSheet(
                         }
                     }
                     TextButton(onClick = onDismiss) { Text("Отмена") }
-                    TextButton(
+                    IconButton(
                         onClick = { onSave(title, status, plannedDate, doneDate, comment) },
                         enabled = title.isNotBlank()
-                    ) { Text("Сохранить") }
+                    ) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = "Сохранить",
+                            tint = if (title.isNotBlank()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
             OutlinedTextField(
@@ -323,12 +344,22 @@ internal fun PrescriptionEditorSheet(
                         }
                     }
                     TextButton(onClick = onDismiss) { Text("Отмена") }
-                    TextButton(
+                    IconButton(
                         onClick = {
                             onSave(type, title, dosage, comment, startDate, endDate, visitDate)
                         },
                         enabled = title.isNotBlank()
-                    ) { Text("Сохранить") }
+                    ) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = "Сохранить",
+                            tint = if (title.isNotBlank()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
             EditorSectionTitle("Тип")
