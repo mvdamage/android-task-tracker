@@ -19,6 +19,9 @@ data class NotesUiState(
     val notes: List<NoteEntity> = emptyList(),
     val listItemsByNoteId: Map<Long, List<NoteListItemEntity>> = emptyMap(),
     val groups: List<NoteThemeGroup> = emptyList(),
+    /** Number of checked list items across all notes (for clear-completed action). */
+    val completedItemCount: Int = 0,
+    /** Fully completed list notes (legacy counter; kept for tests). */
     val completedCount: Int = 0
 )
 
@@ -50,6 +53,7 @@ class NotesViewModel(
                 val themeNotes = notes.filter { it.theme == theme }
                 if (themeNotes.isEmpty()) null else NoteThemeGroup(theme, themeNotes)
             },
+            completedItemCount = items.count { it.isChecked },
             completedCount = notes.count { note ->
                 isNoteCompleted(note, byNoteId[note.id].orEmpty())
             }
@@ -90,7 +94,11 @@ class NotesViewModel(
     }
 
     fun clearCompleted() {
-        viewModelScope.launch { repository.deleteCompletedListNotes() }
+        viewModelScope.launch { repository.clearCompletedListItems() }
+    }
+
+    fun appendListItems(noteId: Long, texts: List<String>) {
+        viewModelScope.launch { repository.appendListItems(noteId, texts) }
     }
 
     fun toggleListItem(item: NoteListItemEntity) {

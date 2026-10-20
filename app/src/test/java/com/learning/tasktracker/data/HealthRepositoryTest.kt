@@ -65,6 +65,31 @@ class HealthRepositoryTest {
     }
 
     @Test
+    fun plannedDoctorVisit_createsVisibleTaskWithTime() = runTest {
+        val personId = healthRepo.addPerson("Марина")
+        val due = DateUtils.todayEpochDay() + 2
+        val time = 14 * 60 + 30
+        val analysisId = healthRepo.addAnalysis(
+            personId = personId,
+            kind = HealthAnalysisKind.DOCTOR,
+            title = "Терапевт",
+            status = HealthAnalysisStatus.PLANNED,
+            plannedDateEpochDay = due,
+            plannedTimeMinutes = time
+        )
+        assertTrue(analysisId > 0)
+        val analysis = healthRepo.observeSnapshot().first()
+            .analyses.first { it.id == analysisId }
+        assertTrue(analysis.linkedTaskId != null && analysis.linkedTaskId!! > 0)
+        val task = taskRepo.getById(analysis.linkedTaskId!!)!!
+        assertEquals("Приём: Терапевт", task.title)
+        assertEquals(due, task.dueDateEpochDay)
+        assertEquals(time, task.dueTimeMinutes)
+        assertEquals(TaskKind.TASK, task.kind)
+        assertEquals(false, task.isDone)
+    }
+
+    @Test
     fun deletePerson_keepsCreatedTasks() = runTest {
         val personId = healthRepo.addPerson("Иван")
         val person = healthRepo.observeSnapshot().first().persons.first { it.id == personId }

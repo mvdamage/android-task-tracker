@@ -53,6 +53,12 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE format = 'LIST'")
     suspend fun getListNotes(): List<NoteEntity>
 
+    @Query("DELETE FROM note_list_items WHERE isChecked = 1")
+    suspend fun deleteCheckedListItems()
+
+    @Query("SELECT COUNT(*) FROM note_list_items WHERE isChecked = 1")
+    suspend fun countCheckedListItems(): Int
+
     @Transaction
     suspend fun replaceListItems(noteId: Long, items: List<NoteListItemEntity>) {
         deleteListItemsForNote(noteId)

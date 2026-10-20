@@ -105,7 +105,11 @@ fun NotesScreen(viewModel: NotesViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val noteAddedMessage = stringResource(R.string.voice_snackbar_note_added)
+    val noteItemsAddedMessage = stringResource(R.string.voice_snackbar_note_items_added)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val listNotes = remember(state.notes) {
+        state.notes.filter { it.format == NoteFormat.LIST }
+    }
     val voiceSession = rememberVoiceCaptureSession(
         onTextRecognized = { text ->
             val draft = NoteVoiceParser.parseNoteVoice(text)
@@ -196,14 +200,14 @@ fun NotesScreen(viewModel: NotesViewModel) {
                             style = MaterialTheme.typography.titleSmall,
                             color = muted
                         )
-                        if (state.completedCount > 0) {
+                        if (state.completedItemCount > 0) {
                             IconButton(
                                 onClick = { confirmClearCompleted = true },
                                 modifier = Modifier.testTag(TestTags.CLEAR_COMPLETED_NOTES)
                             ) {
                                 Icon(
                                     Icons.Outlined.DeleteSweep,
-                                    contentDescription = "Очистить выполненные списки",
+                                    contentDescription = "Очистить выполненные пункты",
                                     tint = muted
                                 )
                             }
@@ -260,6 +264,14 @@ fun NotesScreen(viewModel: NotesViewModel) {
                     )
                 }
                 editor = null
+            },
+            onDelete = if (current is NoteEditorState.Edit) {
+                { note ->
+                    viewModel.deleteNote(note)
+                    editor = null
+                }
+            } else {
+                null
             }
         )
     }
@@ -282,18 +294,28 @@ fun NotesScreen(viewModel: NotesViewModel) {
     voiceConfirm?.let { draft ->
         NoteVoiceConfirmSheet(
             draft = draft,
+            listNotes = listNotes,
             onDismiss = { voiceConfirm = null },
             onConfirm = { result ->
-                viewModel.addNote(
-                    title = result.title,
-                    body = result.body,
-                    format = result.format,
-                    theme = result.theme,
-                    listItems = result.listItems.map { NoteDraftListItem(it) }
-                )
-                voiceConfirm = null
-                scope.launch {
-                    snackbarHostState.showSnackbar(noteAddedMessage)
+                val appendId = result.appendToNoteId
+                if (appendId != null) {
+                    viewModel.appendListItems(appendId, result.listItems)
+                    voiceConfirm = null
+                    scope.launch {
+                        snackbarHostState.showSnackbar(noteItemsAddedMessage)
+                    }
+                } else {
+                    viewModel.addNote(
+                        title = result.title,
+                        body = result.body,
+                        format = result.format,
+                        theme = result.theme,
+                        listItems = result.listItems.map { NoteDraftListItem(it) }
+                    )
+                    voiceConfirm = null
+                    scope.launch {
+                        snackbarHostState.showSnackbar(noteAddedMessage)
+                    }
                 }
             }
         )
@@ -302,11 +324,11 @@ fun NotesScreen(viewModel: NotesViewModel) {
     if (confirmClearCompleted) {
         AlertDialog(
             onDismissRequest = { confirmClearCompleted = false },
-            title = { Text("Очистить выполненные?") },
+            title = { Text("Очистить выполненные пункты?") },
             text = {
                 Text(
-                    "Будут удалены все списки, в которых отмечены все пункты " +
-                        "(${state.completedCount})."
+                    "Будут удалены все отмеченные пункты во всех заметках " +
+                        "(${state.completedItemCount})."
                 )
             },
             confirmButton = {

@@ -39,6 +39,18 @@ class NoteVoiceParserTest {
     }
 
     @Test
+    fun parseListItems_splitsByCommaAndI() {
+        val items = NoteVoiceParser.parseListItems("молоко, хлеб и яйца")
+        assertEquals(listOf("молоко", "хлеб", "яйца"), items)
+    }
+
+    @Test
+    fun parseListItems_stripsListPrefix() {
+        val items = NoteVoiceParser.parseListItems("список: сыр, масло")
+        assertEquals(listOf("сыр", "масло"), items)
+    }
+
+    @Test
     fun longText_splitsTitleAndBody() {
         val long = "Первое предложение заметки. " + "дальше текст ".repeat(20)
         val draft = NoteVoiceParser.parseNoteVoice(long)!!

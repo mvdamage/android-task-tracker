@@ -230,6 +230,8 @@ class TaskRepository(
         dao.update(current.copy(isDone = !current.isDone, updatedAt = now))
     }
 
+    suspend fun getById(id: Long): TaskEntity? = dao.getById(id)
+
     suspend fun updateNotes(taskId: Long, notes: String) {
         val current = dao.getById(taskId) ?: return
         val trimmed = notes.trim()

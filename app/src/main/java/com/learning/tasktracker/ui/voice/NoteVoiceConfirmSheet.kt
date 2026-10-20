@@ -37,8 +37,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.learning.tasktracker.R
+import com.learning.tasktracker.data.NoteEntity
 import com.learning.tasktracker.data.NoteFormat
 import com.learning.tasktracker.data.NoteTheme
 import com.learning.tasktracker.ui.components.EditorSectionTitle
@@ -49,13 +51,16 @@ data class NoteVoiceConfirmResult(
     val body: String,
     val format: NoteFormat,
     val theme: NoteTheme,
-    val listItems: List<String>
+    val listItems: List<String>,
+    /** When set, append [listItems] to this existing list note instead of creating a new one. */
+    val appendToNoteId: Long? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NoteVoiceConfirmSheet(
     draft: NoteVoiceDraft,
+    listNotes: List<NoteEntity> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: (NoteVoiceConfirmResult) -> Unit
 ) {
@@ -64,14 +69,20 @@ fun NoteVoiceConfirmSheet(
     var body by remember(draft) { mutableStateOf(draft.body) }
     var format by remember(draft) { mutableStateOf(draft.format) }
     var theme by remember(draft) { mutableStateOf(draft.theme) }
+    var appendToNoteId by remember(draft) { mutableStateOf<Long?>(null) }
     val listItems = remember(draft) {
         mutableStateListOf<String>().also { list ->
             list.addAll(draft.listItems.ifEmpty { listOf("") })
         }
     }
-    val canSave = title.isNotBlank() && (
-        format == NoteFormat.TEXT || listItems.any { it.isNotBlank() }
-        )
+    val appending = appendToNoteId != null
+    val canSave = if (appending) {
+        listItems.any { it.isNotBlank() }
+    } else {
+        title.isNotBlank() && (
+            format == NoteFormat.TEXT || listItems.any { it.isNotBlank() }
+            )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -86,57 +97,103 @@ fun NoteVoiceConfirmSheet(
                 .padding(bottom = 28.dp)
         ) {
             Text(
-                text = stringResource(R.string.voice_confirm_note_title),
+                text = if (appending) {
+                    stringResource(R.string.voice_confirm_note_append_title)
+                } else {
+                    stringResource(R.string.voice_confirm_note_title)
+                },
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            EditorSectionTitle("Формат")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                NoteFormat.entries.forEach { option ->
+            if (listNotes.isNotEmpty()) {
+                EditorSectionTitle("Куда добавить")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     FilterChip(
-                        selected = format == option,
-                        onClick = { format = option },
-                        label = { Text(option.label) }
+                        selected = appendToNoteId == null,
+                        onClick = {
+                            appendToNoteId = null
+                            if (format == NoteFormat.TEXT && listItems.none { it.isNotBlank() }) {
+                                // keep current
+                            }
+                        },
+                        label = { Text("Новая заметка") }
                     )
+                    listNotes.forEach { note ->
+                        FilterChip(
+                            selected = appendToNoteId == note.id,
+                            onClick = {
+                                appendToNoteId = note.id
+                                format = NoteFormat.LIST
+                                if (listItems.none { it.isNotBlank() } && title.isNotBlank()) {
+                                    listItems.clear()
+                                    listItems.add(title)
+                                }
+                            },
+                            label = {
+                                Text(
+                                    note.title,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        )
+                    }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            EditorSectionTitle("Тема")
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                NoteTheme.entries.forEach { option ->
-                    FilterChip(
-                        selected = theme == option,
-                        onClick = { theme = option },
-                        label = { Text(option.label) }
+
+            if (!appending) {
+                EditorSectionTitle("Формат")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    NoteFormat.entries.forEach { option ->
+                        FilterChip(
+                            selected = format == option,
+                            onClick = { format = option },
+                            label = { Text(option.label) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                EditorSectionTitle("Тема")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    NoteTheme.entries.forEach { option ->
+                        FilterChip(
+                            selected = theme == option,
+                            onClick = { theme = option },
+                            label = { Text(option.label) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.voice_confirm_note_title_hint)) },
+                    singleLine = true,
+                    supportingText = if (draft.truncated) {
+                        { Text(stringResource(R.string.voice_title_truncated)) }
+                    } else {
+                        null
+                    },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                     )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.voice_confirm_note_title_hint)) },
-                singleLine = true,
-                supportingText = if (draft.truncated) {
-                    { Text(stringResource(R.string.voice_title_truncated)) }
-                } else {
-                    null
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
                 )
-            )
-            if (format == NoteFormat.TEXT) {
+            }
+            if (!appending && format == NoteFormat.TEXT) {
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = body,
@@ -149,7 +206,7 @@ fun NoteVoiceConfirmSheet(
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface
                     )
                 )
-            } else {
+            } else if (appending || format == NoteFormat.LIST) {
                 Spacer(modifier = Modifier.height(8.dp))
                 EditorSectionTitle("Пункты")
                 listItems.forEachIndexed { index, item ->
@@ -200,9 +257,10 @@ fun NoteVoiceConfirmSheet(
                             NoteVoiceConfirmResult(
                                 title = title.trim(),
                                 body = body.trim(),
-                                format = format,
+                                format = if (appending) NoteFormat.LIST else format,
                                 theme = theme,
-                                listItems = listItems.map { it.trim() }.filter { it.isNotEmpty() }
+                                listItems = listItems.map { it.trim() }.filter { it.isNotEmpty() },
+                                appendToNoteId = appendToNoteId
                             )
                         )
                     },

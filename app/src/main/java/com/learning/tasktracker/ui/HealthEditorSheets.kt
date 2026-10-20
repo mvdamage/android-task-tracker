@@ -166,6 +166,7 @@ internal fun AnalysisEditorSheet(
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
+        plannedTimeMinutes: Int?,
         doneDateEpochDay: Long?,
         comment: String
     ) -> Unit,
@@ -181,10 +182,35 @@ internal fun AnalysisEditorSheet(
         mutableStateOf(existing?.status ?: HealthAnalysisStatus.PLANNED)
     }
     var plannedDate by remember(state) { mutableStateOf(existing?.plannedDateEpochDay) }
+    var plannedTimeMinutes by remember(state) {
+        mutableStateOf(existing?.plannedTimeMinutes)
+    }
+    var timeEnabled by remember(state) {
+        mutableStateOf(existing?.plannedTimeMinutes != null)
+    }
+    var hourText by remember(state) {
+        mutableStateOf(
+            ((existing?.plannedTimeMinutes ?: 9 * 60) / 60).toString()
+        )
+    }
+    var minuteText by remember(state) {
+        mutableStateOf(
+            ((existing?.plannedTimeMinutes ?: 9 * 60) % 60).toString()
+        )
+    }
     var doneDate by remember(state) { mutableStateOf(existing?.doneDateEpochDay) }
     var comment by remember(state) { mutableStateOf(existing?.comment.orEmpty()) }
     var pickingPlanned by remember { mutableStateOf(false) }
     var pickingDone by remember { mutableStateOf(false) }
+
+    fun resolvedPlannedTime(): Int? {
+        if (kind != HealthAnalysisKind.DOCTOR || plannedDate == null || !timeEnabled) {
+            return null
+        }
+        val h = hourText.toIntOrNull()?.coerceIn(0, 23) ?: 9
+        val m = minuteText.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        return h * 60 + m
+    }
     val titleLabel = if (kind == HealthAnalysisKind.DOCTOR) "Врач / приём" else "Название"
     val plannedLabel = if (kind == HealthAnalysisKind.DOCTOR) "Дата приёма" else "Плановая дата"
     val doneLabel = if (kind == HealthAnalysisKind.DOCTOR) "Дата визита" else "Дата сдачи"
@@ -222,7 +248,17 @@ internal fun AnalysisEditorSheet(
                     }
                     TextButton(onClick = onDismiss) { Text("Отмена") }
                     IconButton(
-                        onClick = { onSave(kind, title, status, plannedDate, doneDate, comment) },
+                        onClick = {
+                            onSave(
+                                kind,
+                                title,
+                                status,
+                                plannedDate,
+                                resolvedPlannedTime(),
+                                doneDate,
+                                comment
+                            )
+                        },
                         enabled = title.isNotBlank()
                     ) {
                         Icon(
@@ -278,6 +314,39 @@ internal fun AnalysisEditorSheet(
                     plannedDate?.let { "$plannedLabel: ${DateUtils.formatShort(it)}" }
                         ?: plannedLabel
                 )
+            }
+            if (kind == HealthAnalysisKind.DOCTOR && plannedDate != null) {
+                FilterChip(
+                    selected = timeEnabled,
+                    onClick = { timeEnabled = !timeEnabled },
+                    label = { Text("Указать время") }
+                )
+                if (timeEnabled) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = hourText,
+                            onValueChange = {
+                                hourText = it.filter { ch -> ch.isDigit() }.take(2)
+                            },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Час") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            colors = healthFieldColors()
+                        )
+                        OutlinedTextField(
+                            value = minuteText,
+                            onValueChange = {
+                                minuteText = it.filter { ch -> ch.isDigit() }.take(2)
+                            },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Мин") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            colors = healthFieldColors()
+                        )
+                    }
+                }
             }
             if (status == HealthAnalysisStatus.DONE) {
                 TextButton(onClick = { pickingDone = true }) {

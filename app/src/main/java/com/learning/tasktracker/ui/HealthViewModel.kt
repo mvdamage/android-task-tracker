@@ -126,6 +126,7 @@ class HealthViewModel(
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
+        plannedTimeMinutes: Int?,
         doneDateEpochDay: Long?,
         comment: String
     ) {
@@ -137,6 +138,7 @@ class HealthViewModel(
                 title = title,
                 status = status,
                 plannedDateEpochDay = plannedDateEpochDay,
+                plannedTimeMinutes = plannedTimeMinutes,
                 doneDateEpochDay = doneDateEpochDay,
                 comment = comment
             )
@@ -149,12 +151,20 @@ class HealthViewModel(
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
+        plannedTimeMinutes: Int?,
         doneDateEpochDay: Long?,
         comment: String
     ) {
         viewModelScope.launch {
             repository.updateAnalysis(
-                analysis, kind, title, status, plannedDateEpochDay, doneDateEpochDay, comment
+                analysis,
+                kind,
+                title,
+                status,
+                plannedDateEpochDay,
+                plannedTimeMinutes,
+                doneDateEpochDay,
+                comment
             )
         }
     }

@@ -16,8 +16,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -42,9 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.learning.tasktracker.R
 import com.learning.tasktracker.data.NoteDraftListItem
 import com.learning.tasktracker.data.NoteEntity
 import com.learning.tasktracker.data.NoteFormat
@@ -53,6 +57,9 @@ import com.learning.tasktracker.data.NoteTheme
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.components.EditorSectionTitle
 import com.learning.tasktracker.ui.theme.extendedColors
+import com.learning.tasktracker.ui.voice.VoiceCaptureDialogs
+import com.learning.tasktracker.ui.voice.rememberVoiceCaptureSession
+import com.learning.tasktracker.voice.NoteVoiceParser
 import kotlin.math.roundToInt
 
 sealed class NoteEditorState {
@@ -81,7 +88,8 @@ private data class DraftListRow(
 internal fun NoteEditorSheet(
     state: NoteEditorState,
     onDismiss: () -> Unit,
-    onSave: (NoteEditorResult) -> Unit
+    onSave: (NoteEditorResult) -> Unit,
+    onDelete: ((NoteEntity) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val existing = (state as? NoteEditorState.Edit)?.note
@@ -100,6 +108,19 @@ internal fun NoteEditorSheet(
         }
     }
     var newListItem by remember(state) { mutableStateOf("") }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var voiceEmptyError by remember { mutableStateOf(false) }
+    val voiceSession = rememberVoiceCaptureSession(
+        onTextRecognized = { text ->
+            val items = NoteVoiceParser.parseListItems(text)
+            if (items.isEmpty()) {
+                voiceEmptyError = true
+            } else {
+                format = NoteFormat.LIST
+                items.forEach { listRows.add(DraftListRow(it, false)) }
+            }
+        }
+    )
     val canSave = title.isNotBlank() && (
         format == NoteFormat.TEXT ||
             listRows.any { it.text.isNotBlank() } ||
@@ -144,20 +165,31 @@ internal fun NoteEditorSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextButton(onClick = onDismiss) { Text("Отмена") }
-                TextButton(
-                    onClick = {
-                        if (canSave) onSave(buildResult())
-                    },
-                    enabled = canSave
-                ) {
-                    Text(
-                        "Готово",
-                        color = if (canSave) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (existing != null && onDelete != null) {
+                        IconButton(onClick = { confirmDelete = true }) {
+                            Icon(
+                                Icons.Outlined.Delete,
+                                contentDescription = "Удалить заметку",
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
-                    )
+                    }
+                    TextButton(
+                        onClick = {
+                            if (canSave) onSave(buildResult())
+                        },
+                        enabled = canSave
+                    ) {
+                        Text(
+                            "Готово",
+                            color = if (canSave) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
 
@@ -346,6 +378,16 @@ internal fun NoteEditorSheet(
                         )
                     )
                     IconButton(
+                        onClick = voiceSession.onMicClick,
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Mic,
+                            contentDescription = stringResource(R.string.voice_mic_content_description),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(
                         onClick = { commitNewListItem() },
                         enabled = newListItem.isNotBlank(),
                         modifier = Modifier.padding(top = 4.dp)
@@ -363,5 +405,39 @@ internal fun NoteEditorSheet(
                 }
             }
         }
+    }
+
+    VoiceCaptureDialogs(session = voiceSession)
+
+    if (voiceEmptyError) {
+        AlertDialog(
+            onDismissRequest = { voiceEmptyError = false },
+            title = { Text(stringResource(R.string.voice_error_title)) },
+            text = { Text(stringResource(R.string.voice_error_no_note)) },
+            confirmButton = {
+                TextButton(onClick = { voiceEmptyError = false }) {
+                    Text(stringResource(R.string.voice_ok))
+                }
+            }
+        )
+    }
+
+    if (confirmDelete && existing != null && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Удалить заметку?") },
+            text = { Text("Заметка «${existing.title}» будет удалена без возможности восстановления.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete(existing)
+                        confirmDelete = false
+                    }
+                ) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Отмена") }
+            }
+        )
     }
 }

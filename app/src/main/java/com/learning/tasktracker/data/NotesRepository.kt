@@ -109,6 +109,38 @@ class NotesRepository(
         }
     }
 
+    /** Removes every checked list item across all notes. */
+    suspend fun clearCompletedListItems() {
+        dao.deleteCheckedListItems()
+        val now = System.currentTimeMillis()
+        dao.getListNotes().forEach { note ->
+            dao.update(note.copy(updatedAt = now))
+        }
+    }
+
+    suspend fun appendListItems(noteId: Long, texts: List<String>) {
+        val note = dao.getById(noteId) ?: return
+        if (note.format != NoteFormat.LIST) return
+        val trimmed = texts.map { it.trim() }.filter { it.isNotEmpty() }
+        if (trimmed.isEmpty()) return
+        val existing = dao.listItemsForNote(noteId)
+        var order = existing.size
+        val now = System.currentTimeMillis()
+        trimmed.forEach { text ->
+            dao.insertListItem(
+                NoteListItemEntity(
+                    noteId = noteId,
+                    text = text,
+                    isChecked = false,
+                    sortOrder = order++,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+        }
+        dao.update(note.copy(updatedAt = now))
+    }
+
     suspend fun toggleListItem(item: NoteListItemEntity) {
         dao.updateListItem(
             item.copy(

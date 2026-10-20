@@ -28,6 +28,11 @@ object HealthRules {
         }
     }
 
+    fun doctorVisitTaskTitle(visitTitle: String): String {
+        val base = visitTitle.trim().ifEmpty { "без названия" }
+        return "Приём: $base"
+    }
+
     fun taskNotesFor(personName: String): String {
         val name = personName.trim()
         return if (name.isEmpty()) "" else "Здоровье: $name"

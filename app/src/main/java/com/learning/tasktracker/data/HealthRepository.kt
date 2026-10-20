@@ -59,6 +59,7 @@ class HealthRepository(
         title: String,
         status: HealthAnalysisStatus = HealthAnalysisStatus.PLANNED,
         plannedDateEpochDay: Long? = null,
+        plannedTimeMinutes: Int? = null,
         doneDateEpochDay: Long? = null,
         comment: String = ""
     ): Long {
@@ -68,20 +69,32 @@ class HealthRepository(
             HealthAnalysisStatus.DONE -> doneDateEpochDay ?: DateUtils.todayEpochDay()
             HealthAnalysisStatus.PLANNED -> null
         }
+        val resolvedTime =
+            if (kind == HealthAnalysisKind.DOCTOR && plannedDateEpochDay != null) {
+                plannedTimeMinutes
+            } else {
+                null
+            }
         val now = System.currentTimeMillis()
-        return dao.insertAnalysis(
+        val analysisId = dao.insertAnalysis(
             HealthAnalysisEntity(
                 personId = personId,
                 kind = kind,
                 title = normalized,
                 status = status,
                 plannedDateEpochDay = plannedDateEpochDay,
+                plannedTimeMinutes = resolvedTime,
                 doneDateEpochDay = resolvedDone,
                 comment = comment.trim(),
                 createdAt = now,
                 updatedAt = now
             )
         )
+        if (analysisId > 0L) {
+            val saved = dao.getAnalysis(analysisId) ?: return analysisId
+            syncDoctorVisitTask(saved)
+        }
+        return analysisId
     }
 
     suspend fun updateAnalysis(
@@ -90,6 +103,7 @@ class HealthRepository(
         title: String,
         status: HealthAnalysisStatus,
         plannedDateEpochDay: Long?,
+        plannedTimeMinutes: Int? = analysis.plannedTimeMinutes,
         doneDateEpochDay: Long?,
         comment: String
     ) {
@@ -98,21 +112,78 @@ class HealthRepository(
             HealthAnalysisStatus.DONE -> doneDateEpochDay ?: DateUtils.todayEpochDay()
             HealthAnalysisStatus.PLANNED -> null
         }
-        dao.updateAnalysis(
-            analysis.copy(
-                kind = kind,
-                title = normalized,
-                status = status,
-                plannedDateEpochDay = plannedDateEpochDay,
-                doneDateEpochDay = resolvedDone,
-                comment = comment.trim(),
-                updatedAt = System.currentTimeMillis()
-            )
+        val resolvedTime =
+            if (kind == HealthAnalysisKind.DOCTOR && plannedDateEpochDay != null) {
+                plannedTimeMinutes
+            } else {
+                null
+            }
+        val updated = analysis.copy(
+            kind = kind,
+            title = normalized,
+            status = status,
+            plannedDateEpochDay = plannedDateEpochDay,
+            plannedTimeMinutes = resolvedTime,
+            doneDateEpochDay = resolvedDone,
+            comment = comment.trim(),
+            updatedAt = System.currentTimeMillis()
         )
+        dao.updateAnalysis(updated)
+        syncDoctorVisitTask(dao.getAnalysis(analysis.id) ?: updated)
     }
 
     suspend fun deleteAnalysis(analysis: HealthAnalysisEntity) {
         dao.deleteAnalysis(analysis)
+    }
+
+    /**
+     * Ensures a planned doctor visit has a visible TASK with the same date/time.
+     * Marks the linked task done when the visit is completed.
+     */
+    private suspend fun syncDoctorVisitTask(analysis: HealthAnalysisEntity) {
+        if (analysis.kind != HealthAnalysisKind.DOCTOR) return
+        val personName = dao.getPerson(analysis.personId)?.name.orEmpty()
+        val title = HealthRules.doctorVisitTaskTitle(analysis.title)
+        val notes = HealthRules.taskNotesFor(personName)
+        val existingTaskId = analysis.linkedTaskId
+        val existingTask = existingTaskId?.let { taskRepository.getById(it) }
+
+        when {
+            analysis.status == HealthAnalysisStatus.PLANNED &&
+                analysis.plannedDateEpochDay != null -> {
+                if (existingTask != null) {
+                    taskRepository.update(
+                        existingTask.copy(
+                            title = title,
+                            notes = notes,
+                            dueDateEpochDay = analysis.plannedDateEpochDay,
+                            dueTimeMinutes = analysis.plannedTimeMinutes,
+                            dueTimeEndMinutes = null,
+                            isDone = false,
+                            kind = TaskKind.TASK
+                        )
+                    )
+                } else {
+                    val taskId = taskRepository.add(
+                        title = title,
+                        notes = notes,
+                        priority = Priority.MEDIUM,
+                        dueDateEpochDay = analysis.plannedDateEpochDay,
+                        dueTimeMinutes = analysis.plannedTimeMinutes,
+                        dueTimeEndMinutes = null,
+                        kind = TaskKind.TASK
+                    )
+                    if (taskId > 0L) {
+                        dao.updateAnalysis(analysis.copy(linkedTaskId = taskId))
+                    }
+                }
+            }
+            analysis.status == HealthAnalysisStatus.DONE && existingTask != null -> {
+                if (!existingTask.isDone) {
+                    taskRepository.update(existingTask.copy(isDone = true))
+                }
+            }
+        }
     }
 
     suspend fun addPrescription(

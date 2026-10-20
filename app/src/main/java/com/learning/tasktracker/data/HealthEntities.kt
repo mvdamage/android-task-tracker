@@ -33,8 +33,11 @@ data class HealthAnalysisEntity(
     val title: String,
     val status: HealthAnalysisStatus = HealthAnalysisStatus.PLANNED,
     val plannedDateEpochDay: Long? = null,
+    val plannedTimeMinutes: Int? = null,
     val doneDateEpochDay: Long? = null,
     val comment: String = "",
+    /** Task created for a planned doctor visit; kept in sync on update. */
+    val linkedTaskId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

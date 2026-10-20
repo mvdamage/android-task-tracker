@@ -28,6 +28,21 @@ object NoteVoiceParser {
 
     private val splitListRegex = Regex("""[,;]|\s+и\s+|\r?\n""", RegexOption.IGNORE_CASE)
 
+    /**
+     * Parses spoken text into list item titles (for appending to an existing note).
+     * Supports comma/`и`/newline separators and an optional «список:» prefix.
+     */
+    fun parseListItems(raw: String): List<String> {
+        val source = raw.trim()
+        if (source.isEmpty()) return emptyList()
+        val withoutTheme = themePrefixRegex.find(source)?.groupValues?.get(2)?.trim() ?: source
+        val payload = listPrefixRegex.find(withoutTheme)?.groupValues?.get(1)?.trim()
+            ?: withoutTheme
+        return splitListRegex.split(payload)
+            .map { VoiceTextNormalizer.normalize(it).title }
+            .filter { it.isNotEmpty() }
+    }
+
     fun parseNoteVoice(raw: String): NoteVoiceDraft? {
         val source = raw.trim()
         if (source.isEmpty()) return null

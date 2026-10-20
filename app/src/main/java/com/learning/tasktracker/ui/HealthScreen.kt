@@ -330,16 +330,18 @@ fun HealthScreen(viewModel: HealthViewModel) {
         HealthDialog.AddAnalysis -> AnalysisEditorSheet(
             state = AnalysisEditorState.Create,
             onDismiss = { dialog = null },
-            onSave = { kind, title, status, planned, done, comment ->
-                viewModel.addAnalysis(kind, title, status, planned, done, comment)
+            onSave = { kind, title, status, planned, time, done, comment ->
+                viewModel.addAnalysis(kind, title, status, planned, time, done, comment)
                 dialog = null
             }
         )
         is HealthDialog.EditAnalysis -> AnalysisEditorSheet(
             state = AnalysisEditorState.Edit(d.analysis),
             onDismiss = { dialog = null },
-            onSave = { kind, title, status, planned, done, comment ->
-                viewModel.updateAnalysis(d.analysis, kind, title, status, planned, done, comment)
+            onSave = { kind, title, status, planned, time, done, comment ->
+                viewModel.updateAnalysis(
+                    d.analysis, kind, title, status, planned, time, done, comment
+                )
                 dialog = null
             },
             onDelete = {
@@ -580,6 +582,10 @@ private fun AnalysisRow(
                     analysis.plannedDateEpochDay?.let {
                         append(" · ")
                         append(DateUtils.formatShort(it))
+                        analysis.plannedTimeMinutes?.let { minutes ->
+                            append(" ")
+                            append(DateUtils.formatTime(minutes))
+                        }
                     }
                 }
                 Text(
