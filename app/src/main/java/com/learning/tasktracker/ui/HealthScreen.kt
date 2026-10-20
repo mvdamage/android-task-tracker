@@ -68,6 +68,7 @@ private sealed class HealthDialog {
     data class EditPrescription(val prescription: HealthPrescriptionEntity) : HealthDialog()
     data class CreateTask(val prescription: HealthPrescriptionEntity) : HealthDialog()
     data class ConfirmDeletePerson(val person: HealthPersonEntity) : HealthDialog()
+    data object DoctorVisitHistory : HealthDialog()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -218,11 +219,21 @@ fun HealthScreen(viewModel: HealthViewModel) {
                             onAction = { dialog = HealthDialog.AddAnalysis },
                             actionTestTag = TestTags.HEALTH_ADD_ANALYSIS
                         )
+                        TextButton(
+                            onClick = { dialog = HealthDialog.DoctorVisitHistory },
+                            modifier = Modifier.testTag(TestTags.HEALTH_DOCTOR_HISTORY)
+                        ) {
+                            val count = state.doctorVisitHistory.size
+                            Text(
+                                if (count > 0) "История приёмов ($count)"
+                                else "История приёмов"
+                            )
+                        }
                     }
                     if (state.analyses.isEmpty()) {
                         item {
                             Text(
-                                "Пока нет анализов и приёмов",
+                                "Пока нет анализов и запланированных приёмов",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = muted,
                                 modifier = Modifier.padding(vertical = 8.dp)
@@ -429,6 +440,13 @@ fun HealthScreen(viewModel: HealthViewModel) {
                         )
                     }
                 }
+            }
+        )
+        HealthDialog.DoctorVisitHistory -> DoctorVisitHistorySheet(
+            history = state.doctorVisitHistory,
+            onDismiss = { dialog = null },
+            onOpenVisit = { visit ->
+                dialog = HealthDialog.EditAnalysis(visit)
             }
         )
         is HealthDialog.ConfirmDeletePerson -> AlertDialog(

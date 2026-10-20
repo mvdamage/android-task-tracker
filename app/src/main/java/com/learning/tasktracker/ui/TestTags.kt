@@ -9,6 +9,7 @@ object TestTags {
     const val HEALTH_EMPTY_ADD_PERSON = "health_empty_add_person"
     const val HEALTH_ADD_ANALYSIS = "health_add_analysis"
     const val HEALTH_ADD_PRESCRIPTION_FAB = "health_add_prescription_fab"
+    const val HEALTH_DOCTOR_HISTORY = "health_doctor_history"
     const val QUICK_ADD_TASK = "quick_add_task"
     const val QUICK_ADD_SHOPPING = "quick_add_shopping"
     const val ADD_NOTE_FAB = "add_note_fab"

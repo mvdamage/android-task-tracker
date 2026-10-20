@@ -19,12 +19,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+data class DoctorVisitHistoryItem(
+    val visit: HealthAnalysisEntity,
+    val prescriptions: List<HealthPrescriptionEntity>
+)
+
 data class HealthUiState(
     val persons: List<HealthPersonEntity> = emptyList(),
     val selectedPersonId: Long? = null,
     val selectedPerson: HealthPersonEntity? = null,
+    /** Active labs + planned doctor visits (completed visits live in history). */
     val analyses: List<HealthAnalysisEntity> = emptyList(),
     val doctorVisits: List<HealthAnalysisEntity> = emptyList(),
+    val doctorVisitHistory: List<DoctorVisitHistoryItem> = emptyList(),
     val prescriptions: List<HealthPrescriptionEntity> = emptyList(),
     val analysisTitleById: Map<Long, String> = emptyMap(),
     val linkedTaskIdsByPrescription: Map<Long, List<Long>> = emptyMap(),
@@ -46,21 +53,43 @@ class HealthViewModel(
             selectedId != null && persons.any { it.id == selectedId } -> selectedId
             else -> persons.first().id
         }
-        val personAnalyses = snapshot.analyses
-            .filter { it.personId == resolvedId }
+        val personAnalyses = snapshot.analyses.filter { it.personId == resolvedId }
+        val personPrescriptions = snapshot.prescriptions.filter { it.personId == resolvedId }
+        val prescriptionsByVisitId = personPrescriptions
+            .filter { it.sourceAnalysisId != null }
+            .groupBy { it.sourceAnalysisId!! }
+        val activeAnalyses = personAnalyses
+            .filterNot {
+                it.kind == HealthAnalysisKind.DOCTOR && it.status == HealthAnalysisStatus.DONE
+            }
             .sortedWith(
                 compareBy<HealthAnalysisEntity> { it.kind != HealthAnalysisKind.DOCTOR }
                     .thenBy { it.status != HealthAnalysisStatus.PLANNED }
                     .thenBy { it.plannedDateEpochDay ?: Long.MAX_VALUE }
                     .thenByDescending { it.createdAt }
             )
-        val personPrescriptions = snapshot.prescriptions.filter { it.personId == resolvedId }
+        val doctorVisitHistory = personAnalyses
+            .filter {
+                it.kind == HealthAnalysisKind.DOCTOR && it.status == HealthAnalysisStatus.DONE
+            }
+            .sortedWith(
+                compareByDescending<HealthAnalysisEntity> {
+                    it.doneDateEpochDay ?: it.plannedDateEpochDay ?: Long.MIN_VALUE
+                }.thenByDescending { it.createdAt }
+            )
+            .map { visit ->
+                DoctorVisitHistoryItem(
+                    visit = visit,
+                    prescriptions = prescriptionsByVisitId[visit.id].orEmpty()
+                )
+            }
         HealthUiState(
             persons = persons,
             selectedPersonId = resolvedId,
             selectedPerson = persons.firstOrNull { it.id == resolvedId },
-            analyses = personAnalyses,
+            analyses = activeAnalyses,
             doctorVisits = personAnalyses.filter { it.kind == HealthAnalysisKind.DOCTOR },
+            doctorVisitHistory = doctorVisitHistory,
             prescriptions = personPrescriptions,
             analysisTitleById = personAnalyses.associate { it.id to it.title },
             linkedTaskIdsByPrescription = snapshot.links.groupBy({ it.prescriptionId }, { it.taskId }),
