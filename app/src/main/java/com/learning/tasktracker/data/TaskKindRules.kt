@@ -2,7 +2,7 @@ package com.learning.tasktracker.data
 
 /**
  * Normalizes fields by [TaskKind] before persistence.
- * Birthdays are yearly all-day dated items; events require a date.
+ * Birthdays/holidays are yearly all-day dated items; events require a date.
  */
 object TaskKindRules {
     data class Normalized(
@@ -14,7 +14,10 @@ object TaskKindRules {
         val recurrenceEndEpochDay: Long?,
         val dueTimeMinutes: Int?,
         val dueTimeEndMinutes: Int?,
-        val location: String
+        val location: String,
+        val floatingMonth: Int? = null,
+        val floatingWeekday: Int? = null,
+        val floatingOccurrence: FloatingOccurrence? = null
     )
 
     fun normalize(
@@ -27,6 +30,9 @@ object TaskKindRules {
         dueTimeMinutes: Int?,
         dueTimeEndMinutes: Int?,
         location: String = "",
+        floatingMonth: Int? = null,
+        floatingWeekday: Int? = null,
+        floatingOccurrence: FloatingOccurrence? = null,
         fallbackDateEpochDay: Long = DateUtils.todayEpochDay()
     ): Normalized {
         return when (kind) {
@@ -69,6 +75,37 @@ object TaskKindRules {
                     dueTimeMinutes = dueTimeMinutes,
                     dueTimeEndMinutes = dueTimeEndMinutes,
                     location = location.trim()
+                )
+            }
+            TaskKind.HOLIDAY -> {
+                val floatingValid = FloatingHolidayRules.isValid(
+                    floatingMonth ?: -1,
+                    floatingWeekday ?: -1,
+                    floatingOccurrence
+                )
+                val due = if (floatingValid) {
+                    FloatingHolidayRules.nextOrSame(
+                        today = fallbackDateEpochDay,
+                        month = floatingMonth!!,
+                        weekday = floatingWeekday!!,
+                        occurrence = floatingOccurrence!!
+                    )
+                } else {
+                    dueDateEpochDay ?: fallbackDateEpochDay
+                }
+                Normalized(
+                    kind = kind,
+                    priority = Priority.MEDIUM,
+                    dueDateEpochDay = due,
+                    recurrenceType = RecurrenceType.YEARLY,
+                    recurrenceWeekdayMask = 0,
+                    recurrenceEndEpochDay = null,
+                    dueTimeMinutes = null,
+                    dueTimeEndMinutes = null,
+                    location = "",
+                    floatingMonth = if (floatingValid) floatingMonth else null,
+                    floatingWeekday = if (floatingValid) floatingWeekday else null,
+                    floatingOccurrence = if (floatingValid) floatingOccurrence else null
                 )
             }
             TaskKind.BIRTHDAY -> {

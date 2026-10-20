@@ -22,7 +22,10 @@ class TaskRepository(
         dueTimeMinutes: Int? = null,
         dueTimeEndMinutes: Int? = null,
         kind: TaskKind = TaskKind.TASK,
-        location: String = ""
+        location: String = "",
+        floatingMonth: Int? = null,
+        floatingWeekday: Int? = null,
+        floatingOccurrence: FloatingOccurrence? = null
     ): Long {
         val trimmedTitle = title.trim()
         if (trimmedTitle.isEmpty()) return -1L
@@ -35,7 +38,10 @@ class TaskRepository(
             recurrenceEndEpochDay = recurrenceEndEpochDay,
             dueTimeMinutes = dueTimeMinutes,
             dueTimeEndMinutes = dueTimeEndMinutes,
-            location = location
+            location = location,
+            floatingMonth = floatingMonth,
+            floatingWeekday = floatingWeekday,
+            floatingOccurrence = floatingOccurrence
         )
         val alignedDue = DateUtils.alignDueDate(
             normalized.dueDateEpochDay,
@@ -58,7 +64,10 @@ class TaskRepository(
                 recurrenceWeekdayMask = normalized.recurrenceWeekdayMask,
                 recurrenceEndEpochDay = normalized.recurrenceEndEpochDay,
                 dueTimeMinutes = if (alignedDue == null) null else startTime,
-                dueTimeEndMinutes = if (alignedDue == null) null else endTime
+                dueTimeEndMinutes = if (alignedDue == null) null else endTime,
+                floatingMonth = normalized.floatingMonth,
+                floatingWeekday = normalized.floatingWeekday,
+                floatingOccurrence = normalized.floatingOccurrence
             )
         )
     }
@@ -73,7 +82,10 @@ class TaskRepository(
             recurrenceEndEpochDay = task.recurrenceEndEpochDay,
             dueTimeMinutes = task.dueTimeMinutes,
             dueTimeEndMinutes = task.dueTimeEndMinutes,
-            location = task.location
+            location = task.location,
+            floatingMonth = task.floatingMonth,
+            floatingWeekday = task.floatingWeekday,
+            floatingOccurrence = task.floatingOccurrence
         )
         val alignedDue = DateUtils.alignDueDate(
             normalized.dueDateEpochDay,
@@ -95,6 +107,9 @@ class TaskRepository(
                 recurrenceEndEpochDay = normalized.recurrenceEndEpochDay,
                 dueTimeMinutes = if (alignedDue == null) null else startTime,
                 dueTimeEndMinutes = if (alignedDue == null) null else endTime,
+                floatingMonth = normalized.floatingMonth,
+                floatingWeekday = normalized.floatingWeekday,
+                floatingOccurrence = normalized.floatingOccurrence,
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -103,8 +118,8 @@ class TaskRepository(
     suspend fun moveToDay(task: TaskEntity, targetEpochDay: Long?) {
         if (task.dueDateEpochDay == targetEpochDay) return
         if (targetEpochDay == null) {
-            // Calendar items must keep a date (and birthdays keep yearly recurrence).
-            if (task.kind == TaskKind.EVENT || task.kind == TaskKind.BIRTHDAY) return
+            // Calendar items must keep a date (and yearly items keep recurrence).
+            if (task.kind != TaskKind.TASK) return
             dao.update(
                 task.copy(
                     dueDateEpochDay = null,
@@ -113,6 +128,9 @@ class TaskRepository(
                     recurrenceType = RecurrenceType.NONE,
                     recurrenceWeekdayMask = 0,
                     recurrenceEndEpochDay = null,
+                    floatingMonth = null,
+                    floatingWeekday = null,
+                    floatingOccurrence = null,
                     updatedAt = System.currentTimeMillis()
                 )
             )
@@ -123,9 +141,13 @@ class TaskRepository(
             task.recurrenceType,
             task.recurrenceWeekdayMask
         )
+        // Dragging a floating holiday to a day converts it to a fixed date.
         dao.update(
             task.copy(
                 dueDateEpochDay = alignedDue,
+                floatingMonth = if (task.kind == TaskKind.HOLIDAY) null else task.floatingMonth,
+                floatingWeekday = if (task.kind == TaskKind.HOLIDAY) null else task.floatingWeekday,
+                floatingOccurrence = if (task.kind == TaskKind.HOLIDAY) null else task.floatingOccurrence,
                 updatedAt = System.currentTimeMillis()
             )
         )
@@ -136,8 +158,8 @@ class TaskRepository(
         val now = System.currentTimeMillis()
         val due = current.dueDateEpochDay
 
-        // Birthdays: mark done/undone only — never spawn a duplicate next year.
-        if (current.kind == TaskKind.BIRTHDAY) {
+        // Birthdays/holidays: mark done/undone only — never spawn a duplicate next year.
+        if (current.kind == TaskKind.BIRTHDAY || current.kind == TaskKind.HOLIDAY) {
             dao.update(current.copy(isDone = !current.isDone, updatedAt = now))
             return
         }
@@ -258,18 +280,27 @@ class TaskRepository(
             return
         }
         if (last < today) {
-            // Completed past birthdays → next year (keep the reminder, no catch-up while active).
-            dao.getCompletedPastBirthdays(today).forEach { birthday ->
-                val due = birthday.dueDateEpochDay ?: return@forEach
-                val next = DateUtils.nextDueDate(
-                    currentDue = due,
-                    type = RecurrenceType.YEARLY,
-                    interval = birthday.recurrenceInterval.coerceAtLeast(1),
-                    weekdayMask = 0,
-                    endEpochDay = null
-                ) ?: return@forEach
+            // Completed past birthdays/holidays → next year (no catch-up while active).
+            dao.getCompletedPastYearlyCalendarItems(today).forEach { item ->
+                val due = item.dueDateEpochDay ?: return@forEach
+                val next = if (item.hasFloatingHolidayRule) {
+                    FloatingHolidayRules.nextYearAfterDue(
+                        dueEpochDay = due,
+                        month = item.floatingMonth!!,
+                        weekday = item.floatingWeekday!!,
+                        occurrence = item.floatingOccurrence!!
+                    )
+                } else {
+                    DateUtils.nextDueDate(
+                        currentDue = due,
+                        type = RecurrenceType.YEARLY,
+                        interval = item.recurrenceInterval.coerceAtLeast(1),
+                        weekdayMask = 0,
+                        endEpochDay = null
+                    )
+                } ?: return@forEach
                 dao.update(
-                    birthday.copy(
+                    item.copy(
                         dueDateEpochDay = next,
                         isDone = false,
                         updatedAt = System.currentTimeMillis()

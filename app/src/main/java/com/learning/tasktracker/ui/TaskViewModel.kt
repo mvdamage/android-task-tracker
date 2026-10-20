@@ -4,20 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.learning.tasktracker.data.DateUtils
+import com.learning.tasktracker.data.FloatingOccurrence
 import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
-import com.learning.tasktracker.data.TaskEntity
-import com.learning.tasktracker.data.TaskFilter
-import com.learning.tasktracker.data.TaskViewMode
 import com.learning.tasktracker.data.SettingsStore
 import com.learning.tasktracker.data.SubtaskEntity
+import com.learning.tasktracker.data.TaskEntity
+import com.learning.tasktracker.data.TaskFilter
+import com.learning.tasktracker.data.TaskKind
+import com.learning.tasktracker.data.TaskRepository
+import com.learning.tasktracker.data.TaskViewMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import com.learning.tasktracker.data.TaskKind
-import com.learning.tasktracker.data.TaskRepository
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -31,22 +32,22 @@ data class TaskGroup(
     val groupKey: Long get() = DateUtils.toGroupKey(dueDateEpochDay)
 }
 
-/** Events/birthdays appear in the task list only within the current + next month. */
+/** Events/holidays/birthdays appear in the task list only within the current + next month. */
 internal fun TaskEntity.visibleInTaskList(today: Long = DateUtils.todayEpochDay()): Boolean {
     return when (kind) {
         TaskKind.TASK -> true
-        TaskKind.EVENT, TaskKind.BIRTHDAY -> {
+        TaskKind.EVENT, TaskKind.HOLIDAY, TaskKind.BIRTHDAY -> {
             val due = dueDateEpochDay ?: return false
             DateUtils.isWithinListHorizon(due, today)
         }
     }
 }
 
-/** Calendar shows every future event/birthday (today and later), with no month cap. */
+/** Calendar shows every future calendar item (today and later), with no month cap. */
 internal fun TaskEntity.visibleInCalendar(today: Long = DateUtils.todayEpochDay()): Boolean {
     return when (kind) {
         TaskKind.TASK -> true
-        TaskKind.EVENT, TaskKind.BIRTHDAY -> {
+        TaskKind.EVENT, TaskKind.HOLIDAY, TaskKind.BIRTHDAY -> {
             val due = dueDateEpochDay ?: return false
             due >= today
         }
@@ -235,7 +236,10 @@ class TaskViewModel(
         dueTimeMinutes: Int?,
         dueTimeEndMinutes: Int?,
         kind: TaskKind = TaskKind.TASK,
-        location: String = ""
+        location: String = "",
+        floatingMonth: Int? = null,
+        floatingWeekday: Int? = null,
+        floatingOccurrence: FloatingOccurrence? = null
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -250,7 +254,10 @@ class TaskViewModel(
                 recurrenceWeekdayMask = recurrenceWeekdayMask,
                 recurrenceEndEpochDay = recurrenceEndEpochDay,
                 dueTimeMinutes = dueTimeMinutes,
-                dueTimeEndMinutes = dueTimeEndMinutes
+                dueTimeEndMinutes = dueTimeEndMinutes,
+                floatingMonth = floatingMonth,
+                floatingWeekday = floatingWeekday,
+                floatingOccurrence = floatingOccurrence
             )
         }
     }
@@ -267,7 +274,10 @@ class TaskViewModel(
         dueTimeMinutes: Int?,
         dueTimeEndMinutes: Int?,
         kind: TaskKind = task.kind,
-        location: String = ""
+        location: String = "",
+        floatingMonth: Int? = null,
+        floatingWeekday: Int? = null,
+        floatingOccurrence: FloatingOccurrence? = null
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
@@ -283,7 +293,10 @@ class TaskViewModel(
                     recurrenceWeekdayMask = recurrenceWeekdayMask,
                     recurrenceEndEpochDay = recurrenceEndEpochDay,
                     dueTimeMinutes = dueTimeMinutes,
-                    dueTimeEndMinutes = dueTimeEndMinutes
+                    dueTimeEndMinutes = dueTimeEndMinutes,
+                    floatingMonth = floatingMonth,
+                    floatingWeekday = floatingWeekday,
+                    floatingOccurrence = floatingOccurrence
                 )
             )
         }

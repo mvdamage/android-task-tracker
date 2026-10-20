@@ -346,6 +346,10 @@ fun HealthScreen(viewModel: HealthViewModel) {
                     type, title, dosage, comment, start, end, visit, sourceAnalysisId
                 )
                 dialog = null
+            },
+            onSaveMedications = { meds, comment, start, end, sourceAnalysisId ->
+                viewModel.addMedications(meds, comment, start, end, sourceAnalysisId)
+                dialog = null
             }
         )
         is HealthDialog.AddPrescriptionForVisit -> PrescriptionEditorSheet(
@@ -363,6 +367,16 @@ fun HealthScreen(viewModel: HealthViewModel) {
                     start,
                     end,
                     visit,
+                    sourceAnalysisId ?: d.visit.id
+                )
+                dialog = null
+            },
+            onSaveMedications = { meds, comment, start, end, sourceAnalysisId ->
+                viewModel.addMedications(
+                    meds,
+                    comment,
+                    start,
+                    end,
                     sourceAnalysisId ?: d.visit.id
                 )
                 dialog = null

@@ -78,23 +78,23 @@ interface TaskDao {
         dueDateEpochDay: Long
     ): TaskEntity?
 
-    @Query("DELETE FROM tasks WHERE isDone = 1 AND kind != 'BIRTHDAY'")
+    @Query("DELETE FROM tasks WHERE isDone = 1 AND kind != 'BIRTHDAY' AND kind != 'HOLIDAY'")
     suspend fun deleteCompleted()
 
     @Query(
         """
         SELECT * FROM tasks
-        WHERE kind = 'BIRTHDAY' AND isDone = 1
+        WHERE kind IN ('BIRTHDAY', 'HOLIDAY') AND isDone = 1
             AND dueDateEpochDay IS NOT NULL AND dueDateEpochDay < :today
         """
     )
-    suspend fun getCompletedPastBirthdays(today: Long): List<TaskEntity>
+    suspend fun getCompletedPastYearlyCalendarItems(today: Long): List<TaskEntity>
 
     @Query(
         """
         SELECT * FROM tasks
         WHERE recurrenceType != 'NONE' AND isDone = 0
-            AND kind != 'BIRTHDAY'
+            AND kind != 'BIRTHDAY' AND kind != 'HOLIDAY'
             AND dueDateEpochDay IS NOT NULL AND dueDateEpochDay < :today
         """
     )

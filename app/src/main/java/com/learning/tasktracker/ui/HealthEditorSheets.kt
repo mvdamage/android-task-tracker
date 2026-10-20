@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.DatePicker
@@ -33,6 +35,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -68,6 +71,11 @@ sealed class PrescriptionEditorState {
     data object Create : PrescriptionEditorState()
     data class Edit(val prescription: HealthPrescriptionEntity) : PrescriptionEditorState()
 }
+
+data class MedicationDraft(
+    val title: String = "",
+    val dosage: String = ""
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -331,6 +339,13 @@ internal fun PrescriptionEditorSheet(
         visitDateEpochDay: Long?,
         sourceAnalysisId: Long?
     ) -> Unit,
+    onSaveMedications: ((
+        medications: List<MedicationDraft>,
+        comment: String,
+        startDateEpochDay: Long?,
+        endDateEpochDay: Long?,
+        sourceAnalysisId: Long?
+    ) -> Unit)? = null,
     onDelete: ((HealthPrescriptionEntity) -> Unit)? = null,
     onCreateTask: ((HealthPrescriptionEntity) -> Unit)? = null
 ) {
@@ -341,6 +356,9 @@ internal fun PrescriptionEditorSheet(
     }
     var title by remember(state) { mutableStateOf(existing?.title.orEmpty()) }
     var dosage by remember(state) { mutableStateOf(existing?.dosage.orEmpty()) }
+    val medicationDrafts = remember(state) {
+        mutableStateListOf(MedicationDraft())
+    }
     var comment by remember(state) { mutableStateOf(existing?.comment.orEmpty()) }
     var startDate by remember(state) { mutableStateOf(existing?.startDateEpochDay) }
     var endDate by remember(state) { mutableStateOf(existing?.endDateEpochDay) }
@@ -351,6 +369,14 @@ internal fun PrescriptionEditorSheet(
     var picking by remember { mutableStateOf<String?>(null) }
     val lockedVisit = lockedSourceAnalysisId?.let { id ->
         doctorVisits.firstOrNull { it.id == id }
+    }
+    val multiMedicationCreate = existing == null &&
+        type == HealthPrescriptionType.MEDICATION &&
+        onSaveMedications != null
+    val canSave = if (multiMedicationCreate) {
+        medicationDrafts.any { it.title.isNotBlank() }
+    } else {
+        title.isNotBlank()
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -381,23 +407,33 @@ internal fun PrescriptionEditorSheet(
                     TextButton(onClick = onDismiss) { Text("Отмена") }
                     IconButton(
                         onClick = {
-                            onSave(
-                                type,
-                                title,
-                                dosage,
-                                comment,
-                                startDate,
-                                endDate,
-                                visitDate,
-                                sourceAnalysisId
-                            )
+                            if (multiMedicationCreate) {
+                                onSaveMedications?.invoke(
+                                    medicationDrafts.filter { it.title.isNotBlank() },
+                                    comment,
+                                    startDate,
+                                    endDate,
+                                    sourceAnalysisId
+                                )
+                            } else {
+                                onSave(
+                                    type,
+                                    title,
+                                    dosage,
+                                    comment,
+                                    startDate,
+                                    endDate,
+                                    visitDate,
+                                    sourceAnalysisId
+                                )
+                            }
                         },
-                        enabled = title.isNotBlank()
+                        enabled = canSave
                     ) {
                         Icon(
                             Icons.Filled.Check,
                             contentDescription = "Сохранить",
-                            tint = if (title.isNotBlank()) {
+                            tint = if (canSave) {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -445,24 +481,44 @@ internal fun PrescriptionEditorSheet(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = title,
-                onValueChange = { title = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Название") },
-                singleLine = true,
-                colors = healthFieldColors()
-            )
-            if (type == HealthPrescriptionType.MEDICATION) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = dosage,
-                    onValueChange = { dosage = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Дозировка") },
-                    singleLine = true,
-                    colors = healthFieldColors()
-                )
+            if (multiMedicationCreate) {
+                EditorSectionTitle("Лекарства")
+                medicationDrafts.forEachIndexed { index, draft ->
+                    OutlinedTextField(
+                        value = draft.title,
+                        onValueChange = { value ->
+                            medicationDrafts[index] = draft.copy(title = value)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Лекарство ${index + 1}") },
+                        singleLine = true,
+                        colors = healthFieldColors()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = draft.dosage,
+                        onValueChange = { value ->
+                            medicationDrafts[index] = draft.copy(dosage = value)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Дозировка") },
+                        singleLine = true,
+                        colors = healthFieldColors()
+                    )
+                    if (medicationDrafts.size > 1) {
+                        TextButton(
+                            onClick = { medicationDrafts.removeAt(index) }
+                        ) { Text("Удалить строку") }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+                TextButton(
+                    onClick = { medicationDrafts.add(MedicationDraft()) }
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Ещё лекарство")
+                }
                 TextButton(onClick = { picking = "start" }) {
                     Text(
                         startDate?.let { "Начало курса: ${DateUtils.formatShort(it)}" }
@@ -476,11 +532,43 @@ internal fun PrescriptionEditorSheet(
                     )
                 }
             } else {
-                TextButton(onClick = { picking = "visit" }) {
-                    Text(
-                        visitDate?.let { "Дата визита: ${DateUtils.formatShort(it)}" }
-                            ?: "Дата визита"
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Название") },
+                    singleLine = true,
+                    colors = healthFieldColors()
+                )
+                if (type == HealthPrescriptionType.MEDICATION) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = dosage,
+                        onValueChange = { dosage = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Дозировка") },
+                        singleLine = true,
+                        colors = healthFieldColors()
                     )
+                    TextButton(onClick = { picking = "start" }) {
+                        Text(
+                            startDate?.let { "Начало курса: ${DateUtils.formatShort(it)}" }
+                                ?: "Начало курса"
+                        )
+                    }
+                    TextButton(onClick = { picking = "end" }) {
+                        Text(
+                            endDate?.let { "Конец курса: ${DateUtils.formatShort(it)}" }
+                                ?: "Конец курса"
+                        )
+                    }
+                } else {
+                    TextButton(onClick = { picking = "visit" }) {
+                        Text(
+                            visitDate?.let { "Дата визита: ${DateUtils.formatShort(it)}" }
+                                ?: "Дата визита"
+                        )
+                    }
                 }
             }
             OutlinedTextField(

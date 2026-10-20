@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.learning.tasktracker.R
 import com.learning.tasktracker.data.DateUtils
+import com.learning.tasktracker.data.FloatingHolidayRules
 import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SubtaskEntity
@@ -100,6 +101,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDateTime
 import java.time.ZoneId
 import androidx.compose.material.icons.outlined.Cake
+import androidx.compose.material.icons.outlined.Celebration
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -440,7 +442,10 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         recurrenceWeekdayMask = result.recurrenceWeekdayMask,
                         recurrenceEndEpochDay = result.recurrenceEndEpochDay,
                         dueTimeMinutes = result.dueTimeMinutes,
-                        dueTimeEndMinutes = result.dueTimeEndMinutes
+                        dueTimeEndMinutes = result.dueTimeEndMinutes,
+                        floatingMonth = result.floatingMonth,
+                        floatingWeekday = result.floatingWeekday,
+                        floatingOccurrence = result.floatingOccurrence
                     )
                     is EditorState.Edit -> viewModel.updateTask(
                         task = current.task,
@@ -454,7 +459,10 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         recurrenceWeekdayMask = result.recurrenceWeekdayMask,
                         recurrenceEndEpochDay = result.recurrenceEndEpochDay,
                         dueTimeMinutes = result.dueTimeMinutes,
-                        dueTimeEndMinutes = result.dueTimeEndMinutes
+                        dueTimeEndMinutes = result.dueTimeEndMinutes,
+                        floatingMonth = result.floatingMonth,
+                        floatingWeekday = result.floatingWeekday,
+                        floatingOccurrence = result.floatingOccurrence
                     )
                 }
                 editor = null
@@ -633,10 +641,22 @@ private fun ColumnScope.TaskCalendarContent(
                 FilterChip(
                     selected = false,
                     onClick = { onCreate(TaskKind.EVENT) },
-                    label = { Text("Событие и праздники") },
+                    label = { Text("Событие") },
                     leadingIcon = {
                         Icon(
                             Icons.Outlined.Event,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+                FilterChip(
+                    selected = false,
+                    onClick = { onCreate(TaskKind.HOLIDAY) },
+                    label = { Text("Праздник") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Outlined.Celebration,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -778,6 +798,12 @@ private fun ChecklistItemRow(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp)
                     )
+                    TaskKind.HOLIDAY -> Icon(
+                        Icons.Outlined.Celebration,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(14.dp)
+                    )
                     TaskKind.BIRTHDAY -> Icon(
                         Icons.Outlined.Cake,
                         contentDescription = null,
@@ -830,6 +856,13 @@ private fun buildTaskSubtitle(
     }
     if (task.kind == TaskKind.EVENT && task.location.isNotBlank()) {
         parts += task.location.trim()
+    }
+    if (task.hasFloatingHolidayRule) {
+        parts += FloatingHolidayRules.formatLabel(
+            task.floatingMonth!!,
+            task.floatingWeekday!!,
+            task.floatingOccurrence!!
+        )
     }
     if (task.dueTimeMinutes != null) {
         parts += DateUtils.formatTaskTime(task.dueTimeMinutes, task.dueTimeEndMinutes).orEmpty()

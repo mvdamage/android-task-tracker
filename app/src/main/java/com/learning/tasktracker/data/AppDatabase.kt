@@ -60,6 +60,13 @@ class Converters {
     @TypeConverter
     fun toHealthPrescriptionType(value: String): HealthPrescriptionType =
         HealthPrescriptionType.valueOf(value)
+
+    @TypeConverter
+    fun fromFloatingOccurrence(value: FloatingOccurrence?): String? = value?.name
+
+    @TypeConverter
+    fun toFloatingOccurrence(value: String?): FloatingOccurrence? =
+        value?.let { FloatingOccurrence.valueOf(it) }
 }
 
 @Database(
@@ -75,7 +82,7 @@ class Converters {
         HealthPrescriptionEntity::class,
         HealthPrescriptionTaskLinkEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -346,6 +353,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN floatingMonth INTEGER")
+                db.execSQL("ALTER TABLE tasks ADD COLUMN floatingWeekday INTEGER")
+                db.execSQL("ALTER TABLE tasks ADD COLUMN floatingOccurrence TEXT")
+            }
+        }
+
         private val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -416,7 +431,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_11_12,
             MIGRATION_12_13,
             MIGRATION_13_14,
-            MIGRATION_14_15
+            MIGRATION_14_15,
+            MIGRATION_15_16
         )
 
         fun get(context: Context): AppDatabase {

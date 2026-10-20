@@ -8,8 +8,18 @@ enum class Priority(val label: String) {
 
 enum class TaskKind(val label: String) {
     TASK("Задача"),
-    EVENT("Событие и праздники"),
+    EVENT("Событие"),
+    HOLIDAY("Праздник"),
     BIRTHDAY("День рождения")
+}
+
+/** N-th weekday in a month for floating holidays (e.g. last Sunday of November). */
+enum class FloatingOccurrence(val label: String) {
+    FIRST("Первое"),
+    SECOND("Второе"),
+    THIRD("Третье"),
+    FOURTH("Четвёртое"),
+    LAST("Последнее")
 }
 
 enum class TaskFilter(val label: String) {

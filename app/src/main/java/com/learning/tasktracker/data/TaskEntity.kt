@@ -25,6 +25,11 @@ data class TaskEntity(
     val dueTimeMinutes: Int? = null,
     /** End of time window (exclusive display as range); null = point in time only. */
     val dueTimeEndMinutes: Int? = null,
+    /** 1–12 when holiday uses a floating rule; otherwise null. */
+    val floatingMonth: Int? = null,
+    /** [java.time.DayOfWeek] value 1=Mon…7=Sun for floating holidays. */
+    val floatingWeekday: Int? = null,
+    val floatingOccurrence: FloatingOccurrence? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
@@ -35,4 +40,12 @@ data class TaskEntity(
     val isRecurring: Boolean get() = recurrenceType != RecurrenceType.NONE
 
     val isCalendarItem: Boolean get() = kind != TaskKind.TASK
+
+    val hasFloatingHolidayRule: Boolean
+        get() = kind == TaskKind.HOLIDAY &&
+            FloatingHolidayRules.isValid(
+                floatingMonth ?: -1,
+                floatingWeekday ?: -1,
+                floatingOccurrence
+            )
 }

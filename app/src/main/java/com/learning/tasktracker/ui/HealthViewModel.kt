@@ -160,6 +160,34 @@ class HealthViewModel(
         }
     }
 
+    fun addMedications(
+        medications: List<MedicationDraft>,
+        comment: String,
+        startDateEpochDay: Long?,
+        endDateEpochDay: Long?,
+        sourceAnalysisId: Long? = null
+    ) {
+        val personId = selectedPersonId.value ?: return
+        viewModelScope.launch {
+            medications
+                .map { it.copy(title = it.title.trim(), dosage = it.dosage.trim()) }
+                .filter { it.title.isNotEmpty() }
+                .forEach { draft ->
+                    repository.addPrescription(
+                        personId = personId,
+                        type = HealthPrescriptionType.MEDICATION,
+                        title = draft.title,
+                        dosage = draft.dosage,
+                        comment = comment,
+                        startDateEpochDay = startDateEpochDay,
+                        endDateEpochDay = endDateEpochDay,
+                        visitDateEpochDay = null,
+                        sourceAnalysisId = sourceAnalysisId
+                    )
+                }
+        }
+    }
+
     fun updatePrescription(
         prescription: HealthPrescriptionEntity,
         type: HealthPrescriptionType,

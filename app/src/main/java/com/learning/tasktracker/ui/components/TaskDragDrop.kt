@@ -83,10 +83,8 @@ class TaskDayDragState {
     }
 
     private fun acceptsDrop(task: TaskEntity, day: Long): Boolean {
-        // Events and birthdays must keep a calendar date.
-        if (day == DateUtils.UNDATED_GROUP_KEY &&
-            (task.kind == TaskKind.EVENT || task.kind == TaskKind.BIRTHDAY)
-        ) {
+        // Calendar items must keep a calendar date.
+        if (day == DateUtils.UNDATED_GROUP_KEY && task.kind != TaskKind.TASK) {
             return false
         }
         return true
@@ -305,8 +303,7 @@ fun QuickDropDayRow(
     modifier: Modifier = Modifier
 ) {
     val dragged = dragState.draggedTask
-    val allowUndated = dragged == null ||
-        (dragged.kind != TaskKind.EVENT && dragged.kind != TaskKind.BIRTHDAY)
+    val allowUndated = dragged == null || dragged.kind == TaskKind.TASK
     val chips = buildList {
         add(today to "Сегодня")
         add(today + 1 to "Завтра")

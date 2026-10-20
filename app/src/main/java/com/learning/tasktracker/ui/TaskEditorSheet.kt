@@ -53,6 +53,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.rememberUpdatedState
 import com.learning.tasktracker.data.DateUtils
+import com.learning.tasktracker.data.FloatingHolidayRules
+import com.learning.tasktracker.data.FloatingOccurrence
 import com.learning.tasktracker.data.Priority
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SubtaskEntity
@@ -88,7 +90,10 @@ internal data class TaskEditorResult(
     val recurrenceWeekdayMask: Int,
     val recurrenceEndEpochDay: Long?,
     val dueTimeMinutes: Int?,
-    val dueTimeEndMinutes: Int?
+    val dueTimeEndMinutes: Int?,
+    val floatingMonth: Int? = null,
+    val floatingWeekday: Int? = null,
+    val floatingOccurrence: FloatingOccurrence? = null
 )
 
 private enum class TimePickerTarget { Start, End }
@@ -135,7 +140,7 @@ internal fun TaskEditorSheet(
         mutableStateOf(
             when {
                 existing != null -> existing.recurrenceType
-                kind == TaskKind.BIRTHDAY -> RecurrenceType.YEARLY
+                kind == TaskKind.BIRTHDAY || kind == TaskKind.HOLIDAY -> RecurrenceType.YEARLY
                 else -> RecurrenceType.NONE
             }
         )
@@ -144,13 +149,23 @@ internal fun TaskEditorSheet(
         mutableIntStateOf(existing?.recurrenceWeekdayMask ?: 0)
     }
     var dueTimeMinutes by remember(state) {
-        mutableStateOf(if (kind == TaskKind.BIRTHDAY) null else existing?.dueTimeMinutes)
+        mutableStateOf(
+            if (kind == TaskKind.BIRTHDAY || kind == TaskKind.HOLIDAY) null
+            else existing?.dueTimeMinutes
+        )
     }
     var dueTimeEndMinutes by remember(state) {
-        mutableStateOf(if (kind == TaskKind.BIRTHDAY) null else existing?.dueTimeEndMinutes)
+        mutableStateOf(
+            if (kind == TaskKind.BIRTHDAY || kind == TaskKind.HOLIDAY) null
+            else existing?.dueTimeEndMinutes
+        )
     }
     var periodMode by remember(state) {
-        mutableStateOf(existing?.dueTimeEndMinutes != null && kind != TaskKind.BIRTHDAY)
+        mutableStateOf(
+            existing?.dueTimeEndMinutes != null &&
+                kind != TaskKind.BIRTHDAY &&
+                kind != TaskKind.HOLIDAY
+        )
     }
     var recurrenceEndEpochDay by remember(state) {
         mutableStateOf(existing?.recurrenceEndEpochDay)
@@ -171,11 +186,38 @@ internal fun TaskEditorSheet(
         notes = persistedNotes
     }
 
+    var floatingMode by remember(state) {
+        mutableStateOf(existing?.hasFloatingHolidayRule == true)
+    }
+    var floatingMonth by remember(state) {
+        mutableIntStateOf(existing?.floatingMonth ?: 11)
+    }
+    var floatingWeekday by remember(state) {
+        mutableIntStateOf(existing?.floatingWeekday ?: DayOfWeek.SUNDAY.value)
+    }
+    var floatingOccurrence by remember(state) {
+        mutableStateOf(existing?.floatingOccurrence ?: FloatingOccurrence.LAST)
+    }
+
     fun applyKind(next: TaskKind) {
         kind = next
         when (next) {
             TaskKind.BIRTHDAY -> {
                 if (dueDateEpochDay == null) {
+                    dueDateEpochDay = DateUtils.todayEpochDay()
+                }
+                recurrenceType = RecurrenceType.YEARLY
+                recurrenceWeekdayMask = 0
+                recurrenceEndEpochDay = null
+                dueTimeMinutes = null
+                dueTimeEndMinutes = null
+                periodMode = false
+                priority = Priority.MEDIUM
+                location = ""
+                floatingMode = false
+            }
+            TaskKind.HOLIDAY -> {
+                if (dueDateEpochDay == null && !floatingMode) {
                     dueDateEpochDay = DateUtils.todayEpochDay()
                 }
                 recurrenceType = RecurrenceType.YEARLY
@@ -192,12 +234,16 @@ internal fun TaskEditorSheet(
                     dueDateEpochDay = DateUtils.todayEpochDay()
                 }
                 priority = Priority.MEDIUM
-                if (recurrenceType == RecurrenceType.YEARLY && existing?.kind == TaskKind.BIRTHDAY) {
+                floatingMode = false
+                if (recurrenceType == RecurrenceType.YEARLY &&
+                    (existing?.kind == TaskKind.BIRTHDAY || existing?.kind == TaskKind.HOLIDAY)
+                ) {
                     recurrenceType = RecurrenceType.NONE
                 }
             }
             TaskKind.TASK -> {
                 location = ""
+                floatingMode = false
             }
         }
     }
@@ -205,15 +251,27 @@ internal fun TaskEditorSheet(
     val titleSuggestions = remember(title, titleHistory) {
         TaskViewModel.filterTitleSuggestions(titleHistory, title)
     }
+    val floatingValid = kind == TaskKind.HOLIDAY && floatingMode &&
+        FloatingHolidayRules.isValid(floatingMonth, floatingWeekday, floatingOccurrence)
     val customDaysValid = recurrenceType != RecurrenceType.CUSTOM_DAYS || recurrenceWeekdayMask != 0
     val dateRequired = kind != TaskKind.TASK
-    val recurrenceValid = recurrenceType == RecurrenceType.NONE || dueDateEpochDay != null
-    val dateValid = !dateRequired || dueDateEpochDay != null
-    val endDateValid = kind == TaskKind.BIRTHDAY ||
+    val recurrenceValid = recurrenceType == RecurrenceType.NONE || dueDateEpochDay != null || floatingValid
+    val dateValid = !dateRequired || dueDateEpochDay != null || floatingValid
+    val endDateValid = kind == TaskKind.BIRTHDAY || kind == TaskKind.HOLIDAY ||
         dueDateEpochDay == null ||
         recurrenceEndEpochDay == null ||
         recurrenceEndEpochDay!! >= dueDateEpochDay!!
     val canSave = title.isNotBlank() && customDaysValid && endDateValid && recurrenceValid && dateValid
+    val floatingPreviewDay = if (floatingValid) {
+        FloatingHolidayRules.nextOrSame(
+            DateUtils.todayEpochDay(),
+            floatingMonth,
+            floatingWeekday,
+            floatingOccurrence
+        )
+    } else {
+        null
+    }
 
     val dateLabel = dueDateEpochDay?.let { day ->
         val today = DateUtils.todayEpochDay()
@@ -233,14 +291,15 @@ internal fun TaskEditorSheet(
     }
     val startTimeLabel = dueTimeMinutes?.let { DateUtils.formatTime(it) } ?: "Не задано"
     val endTimeLabel = dueTimeEndMinutes?.let { DateUtils.formatTime(it) } ?: "Не задано"
-    val timeEnabled = dueDateEpochDay != null && kind != TaskKind.BIRTHDAY
+    val yearlyCalendarKind = kind == TaskKind.BIRTHDAY || kind == TaskKind.HOLIDAY
+    val timeEnabled = dueDateEpochDay != null && !yearlyCalendarKind
     val showPriority = kind == TaskKind.TASK
     val showLocation = kind == TaskKind.EVENT
-    val showRecurrenceEditor = kind != TaskKind.BIRTHDAY
-    val showRecurrenceEnd = kind != TaskKind.BIRTHDAY && recurrenceType != RecurrenceType.NONE
+    val showRecurrenceEditor = !yearlyCalendarKind
+    val showRecurrenceEnd = !yearlyCalendarKind && recurrenceType != RecurrenceType.NONE
     val showSubtasks = kind == TaskKind.TASK && subtasksEnabled && state is EditorState.Edit
     val recurrenceLabel = when (kind) {
-        TaskKind.BIRTHDAY -> "Каждый год"
+        TaskKind.BIRTHDAY, TaskKind.HOLIDAY -> "Каждый год"
         else -> if (recurrenceType == RecurrenceType.NONE) {
             "Не повторяется"
         } else {
@@ -251,8 +310,13 @@ internal fun TaskEditorSheet(
     val titlePlaceholder = when (kind) {
         TaskKind.TASK -> "Название задачи"
         TaskKind.EVENT -> "Название события"
+        TaskKind.HOLIDAY -> "Название праздника"
         TaskKind.BIRTHDAY -> "Кто отмечает"
     }
+    val monthNames = listOf(
+        "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+        "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -278,8 +342,8 @@ internal fun TaskEditorSheet(
                     onClick = {
                         if (canSave) {
                             val (startTime, endTime) = DateUtils.normalizedTimePeriod(
-                                if (dueDateEpochDay == null || kind == TaskKind.BIRTHDAY) null else dueTimeMinutes,
-                                if (dueDateEpochDay == null || !periodMode || kind == TaskKind.BIRTHDAY) {
+                                if (dueDateEpochDay == null || yearlyCalendarKind) null else dueTimeMinutes,
+                                if (dueDateEpochDay == null || !periodMode || yearlyCalendarKind) {
                                     null
                                 } else {
                                     dueTimeEndMinutes
@@ -292,13 +356,13 @@ internal fun TaskEditorSheet(
                                     location = if (kind == TaskKind.EVENT) location else "",
                                     priority = if (kind == TaskKind.TASK) priority else Priority.MEDIUM,
                                     kind = kind,
-                                    dueDateEpochDay = dueDateEpochDay,
-                                    recurrenceType = if (kind == TaskKind.BIRTHDAY) {
+                                    dueDateEpochDay = if (floatingValid) floatingPreviewDay else dueDateEpochDay,
+                                    recurrenceType = if (yearlyCalendarKind) {
                                         RecurrenceType.YEARLY
                                     } else {
                                         recurrenceType
                                     },
-                                    recurrenceWeekdayMask = if (kind == TaskKind.BIRTHDAY) {
+                                    recurrenceWeekdayMask = if (yearlyCalendarKind) {
                                         0
                                     } else if (recurrenceType == RecurrenceType.CUSTOM_DAYS) {
                                         recurrenceWeekdayMask
@@ -306,12 +370,15 @@ internal fun TaskEditorSheet(
                                         0
                                     },
                                     recurrenceEndEpochDay = when {
-                                        kind == TaskKind.BIRTHDAY -> null
+                                        yearlyCalendarKind -> null
                                         recurrenceType == RecurrenceType.NONE -> null
                                         else -> recurrenceEndEpochDay
                                     },
                                     dueTimeMinutes = startTime,
-                                    dueTimeEndMinutes = endTime
+                                    dueTimeEndMinutes = endTime,
+                                    floatingMonth = if (floatingValid) floatingMonth else null,
+                                    floatingWeekday = if (floatingValid) floatingWeekday else null,
+                                    floatingOccurrence = if (floatingValid) floatingOccurrence else null
                                 )
                             )
                         }
@@ -373,12 +440,95 @@ internal fun TaskEditorSheet(
             Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
 
-            EditorOptionRow(
-                label = "Дата",
-                value = dateLabel,
-                onClick = { showDatePicker = true }
-            )
-            HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
+            if (kind == TaskKind.HOLIDAY) {
+                EditorSectionTitle(title = "Дата праздника")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !floatingMode,
+                        onClick = { floatingMode = false },
+                        label = { Text("Фиксированная") }
+                    )
+                    FilterChip(
+                        selected = floatingMode,
+                        onClick = { floatingMode = true },
+                        label = { Text("Плавающая") }
+                    )
+                }
+                if (floatingMode) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Месяц", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        monthNames.forEachIndexed { index, name ->
+                            FilterChip(
+                                selected = floatingMonth == index + 1,
+                                onClick = { floatingMonth = index + 1 },
+                                label = { Text(name) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("День недели", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DayOfWeek.entries.forEach { dow ->
+                            FilterChip(
+                                selected = floatingWeekday == dow.value,
+                                onClick = { floatingWeekday = dow.value },
+                                label = { Text(DateUtils.weekdayChipLabel(dow)) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Какое по счёту", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FloatingOccurrence.entries.forEach { occurrence ->
+                            FilterChip(
+                                selected = floatingOccurrence == occurrence,
+                                onClick = { floatingOccurrence = occurrence },
+                                label = { Text(occurrence.label) }
+                            )
+                        }
+                    }
+                    floatingPreviewDay?.let { day ->
+                        Text(
+                            text = "Ближайшая дата: ${DateUtils.formatShort(day)} · " +
+                                FloatingHolidayRules.formatLabel(
+                                    floatingMonth,
+                                    floatingWeekday,
+                                    floatingOccurrence
+                                ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
+                        )
+                    }
+                } else {
+                    EditorOptionRow(
+                        label = "Дата",
+                        value = dateLabel,
+                        onClick = { showDatePicker = true }
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
+            } else {
+                EditorOptionRow(
+                    label = "Дата",
+                    value = dateLabel,
+                    onClick = { showDatePicker = true }
+                )
+                HorizontalDivider(color = MaterialTheme.extendedColors.divider, thickness = 0.5.dp)
+            }
 
             if (timeEnabled) {
                 FlowRow(
