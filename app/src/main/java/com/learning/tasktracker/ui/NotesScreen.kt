@@ -15,15 +15,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Notes
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -32,21 +32,65 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.learning.tasktracker.R
+import com.learning.tasktracker.data.NoteDraftListItem
 import com.learning.tasktracker.data.NoteEntity
 import com.learning.tasktracker.data.NoteFormat
 import com.learning.tasktracker.data.NoteListItemEntity
+import com.learning.tasktracker.data.NoteTheme
 import com.learning.tasktracker.ui.components.AnyDoDivider
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.theme.extendedColors
+import com.learning.tasktracker.ui.voice.NoteVoiceConfirmSheet
+import com.learning.tasktracker.ui.voice.VoiceCaptureDialogs
+import com.learning.tasktracker.ui.voice.VoiceCaptureFabColumn
+import com.learning.tasktracker.ui.voice.rememberVoiceCaptureSession
+import com.learning.tasktracker.voice.NoteVoiceDraft
+import com.learning.tasktracker.voice.NoteVoiceParser
+import kotlinx.coroutines.launch
+
+private val NoteVoiceDraftSaver = Saver<NoteVoiceDraft?, List<Any?>>(
+    save = { draft ->
+        if (draft == null) emptyList()
+        else listOf(
+            draft.title,
+            draft.body,
+            draft.format.name,
+            draft.theme.name,
+            draft.listItems,
+            draft.truncated
+        )
+    },
+    restore = { saved ->
+        if (saved.isEmpty()) {
+            null
+        } else {
+            @Suppress("UNCHECKED_CAST")
+            val listItems = saved[4] as List<String>
+            NoteVoiceDraft(
+                title = saved[0] as String,
+                body = saved[1] as String,
+                format = NoteFormat.valueOf(saved[2] as String),
+                theme = NoteTheme.valueOf(saved[3] as String),
+                listItems = listItems,
+                truncated = saved[5] as Boolean
+            )
+        }
+    }
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,11 +98,29 @@ fun NotesScreen(viewModel: NotesViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var editor by remember { mutableStateOf<NoteEditorState?>(null) }
     var confirmClearCompleted by remember { mutableStateOf(false) }
+    var voiceConfirm by rememberSaveable(stateSaver = NoteVoiceDraftSaver) {
+        mutableStateOf(null)
+    }
+    var voiceEmptyError by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val noteAddedMessage = stringResource(R.string.voice_snackbar_note_added)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val voiceSession = rememberVoiceCaptureSession(
+        onTextRecognized = { text ->
+            val draft = NoteVoiceParser.parseNoteVoice(text)
+            if (draft == null) {
+                voiceEmptyError = true
+            } else {
+                voiceConfirm = draft
+            }
+        }
+    )
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 windowInsets = WindowInsets(0, 0, 0, 0),
@@ -75,14 +137,12 @@ fun NotesScreen(viewModel: NotesViewModel) {
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { editor = NoteEditorState.Create },
-                modifier = Modifier.testTag(TestTags.ADD_NOTE_FAB),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Добавить заметку")
-            }
+            VoiceCaptureFabColumn(
+                onPrimaryClick = { editor = NoteEditorState.Create },
+                primaryContentDescription = "Добавить заметку",
+                onMicClick = voiceSession.onMicClick,
+                modifier = Modifier.testTag(TestTags.ADD_NOTE_FAB)
+            )
         }
     ) { padding ->
         if (state.notes.isEmpty()) {
@@ -107,7 +167,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Добавьте текстовую заметку или список",
+                    text = "Добавьте заметку вручную или голосом",
                     style = MaterialTheme.typography.bodyMedium,
                     color = muted
                 )
@@ -200,6 +260,41 @@ fun NotesScreen(viewModel: NotesViewModel) {
                     )
                 }
                 editor = null
+            }
+        )
+    }
+
+    VoiceCaptureDialogs(session = voiceSession)
+
+    if (voiceEmptyError) {
+        AlertDialog(
+            onDismissRequest = { voiceEmptyError = false },
+            title = { Text(stringResource(R.string.voice_error_title)) },
+            text = { Text(stringResource(R.string.voice_error_no_note)) },
+            confirmButton = {
+                TextButton(onClick = { voiceEmptyError = false }) {
+                    Text(stringResource(R.string.voice_ok))
+                }
+            }
+        )
+    }
+
+    voiceConfirm?.let { draft ->
+        NoteVoiceConfirmSheet(
+            draft = draft,
+            onDismiss = { voiceConfirm = null },
+            onConfirm = { result ->
+                viewModel.addNote(
+                    title = result.title,
+                    body = result.body,
+                    format = result.format,
+                    theme = result.theme,
+                    listItems = result.listItems.map { NoteDraftListItem(it) }
+                )
+                voiceConfirm = null
+                scope.launch {
+                    snackbarHostState.showSnackbar(noteAddedMessage)
+                }
             }
         )
     }

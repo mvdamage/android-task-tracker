@@ -4,11 +4,11 @@
 
     <string name="voice_mic_content_description">Добавить голосом</string>
     <string name="voice_disclaimer_title">Распознавание речи</string>
-    <string name="voice_disclaimer_body">Чтобы диктовать задачи и покупки, приложению нужен доступ к микрофону. Распознавание выполняется средствами Android и может потребовать подключение к интернету. Запись голоса в приложении не сохраняется.</string>
+    <string name="voice_disclaimer_body">Чтобы диктовать задачи, покупки и заметки, приложению нужен доступ к микрофону. Распознавание выполняется средствами Android и может потребовать подключение к интернету. Запись голоса в приложении не сохраняется.</string>
     <string name="voice_disclaimer_continue">Продолжить</string>
     <string name="voice_disclaimer_cancel">Отмена</string>
     <string name="voice_permission_title">Доступ к микрофону</string>
-    <string name="voice_permission_rationale">Микрофон нужен, чтобы диктовать задачи и покупки</string>
+    <string name="voice_permission_rationale">Микрофон нужен, чтобы диктовать задачи, покупки и заметки</string>
     <string name="voice_permission_allow">Разрешить</string>
     <string name="voice_permission_denied">Без доступа к микрофону голосовой ввод недоступен. Можно разрешить его в настройках приложения или добавить запись вручную.</string>
     <string name="voice_open_settings">Открыть настройки</string>
@@ -28,6 +28,11 @@
     <string name="voice_confirm_task_title">Новая задача</string>
     <string name="voice_confirm_task_name_hint">Название задачи</string>
     <string name="voice_confirm_shopping_title">Новые покупки</string>
+    <string name="voice_confirm_note_title">Новая заметка</string>
+    <string name="voice_confirm_note_title_hint">Название</string>
+    <string name="voice_confirm_note_body_hint">Текст</string>
+    <string name="voice_snackbar_note_added">Заметка добавлена</string>
+    <string name="voice_error_no_note">Не удалось распознать заметку</string>
     <string name="voice_title_truncated">Текст обрезан до 200 символов</string>
     <string name="voice_chip_today">Сегодня</string>
     <string name="voice_chip_tomorrow">Завтра</string>
