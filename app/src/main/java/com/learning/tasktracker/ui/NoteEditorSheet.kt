@@ -1,5 +1,6 @@
 package com.learning.tasktracker.ui
 
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -28,15 +31,20 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.learning.tasktracker.data.NoteDraftListItem
 import com.learning.tasktracker.data.NoteEntity
 import com.learning.tasktracker.data.NoteFormat
@@ -45,6 +53,7 @@ import com.learning.tasktracker.data.NoteTheme
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
 import com.learning.tasktracker.ui.components.EditorSectionTitle
 import com.learning.tasktracker.ui.theme.extendedColors
+import kotlin.math.roundToInt
 
 sealed class NoteEditorState {
     data object Create : NoteEditorState()
@@ -214,20 +223,73 @@ internal fun NoteEditorSheet(
                 )
             } else {
                 EditorSectionTitle("Пункты списка")
+                val density = LocalDensity.current
+                val rowStridePx = with(density) { 64.dp.toPx() }
+                var draggingIndex by remember { mutableIntStateOf(-1) }
+                var dragOffsetY by remember { mutableFloatStateOf(0f) }
+
+                fun moveRow(from: Int, to: Int) {
+                    if (from == to || from !in listRows.indices || to !in listRows.indices) return
+                    val item = listRows.removeAt(from)
+                    listRows.add(to, item)
+                }
+
                 listRows.forEachIndexed { index, row ->
+                    val isDragging = draggingIndex == index
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .zIndex(if (isDragging) 1f else 0f)
+                            .graphicsLayer {
+                                translationY = if (isDragging) dragOffsetY else 0f
+                                shadowElevation = if (isDragging) 6f else 0f
+                            }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.Top
                     ) {
+                        Icon(
+                            imageVector = Icons.Outlined.DragHandle,
+                            contentDescription = "Перетащить пункт",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(top = 12.dp)
+                                .pointerInput(index, listRows.size) {
+                                    detectVerticalDragGestures(
+                                        onDragStart = {
+                                            draggingIndex = index
+                                            dragOffsetY = 0f
+                                        },
+                                        onVerticalDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragOffsetY += dragAmount
+                                            val from = draggingIndex
+                                            if (from < 0) return@detectVerticalDragGestures
+                                            val shift = (dragOffsetY / rowStridePx).roundToInt()
+                                            val to = (from + shift).coerceIn(0, listRows.lastIndex)
+                                            if (to != from) {
+                                                moveRow(from, to)
+                                                draggingIndex = to
+                                                dragOffsetY -= (to - from) * rowStridePx
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            draggingIndex = -1
+                                            dragOffsetY = 0f
+                                        },
+                                        onDragCancel = {
+                                            draggingIndex = -1
+                                            dragOffsetY = 0f
+                                        }
+                                    )
+                                }
+                        )
                         CircularTaskCheckbox(
                             checked = row.isChecked,
                             onCheckedChange = {
                                 listRows[index] = row.copy(isChecked = !row.isChecked)
                             },
                             size = 20.dp,
-                            modifier = Modifier.padding(top = 12.dp)
+                            modifier = Modifier.padding(top = 12.dp, start = 4.dp)
                         )
                         OutlinedTextField(
                             value = row.text,
@@ -263,27 +325,42 @@ internal fun NoteEditorSheet(
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = newListItem,
-                    onValueChange = { newListItem = it },
-                    placeholder = { Text("Новый пункт") },
-                    singleLine = false,
-                    minLines = 1,
-                    maxLines = 6,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { focusState ->
-                            if (!focusState.isFocused) {
-                                commitNewListItem()
-                            }
-                        },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                        unfocusedIndicatorColor = MaterialTheme.extendedColors.divider
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newListItem,
+                        onValueChange = { newListItem = it },
+                        placeholder = { Text("Новый пункт") },
+                        singleLine = false,
+                        minLines = 1,
+                        maxLines = 6,
+                        modifier = Modifier.weight(1f),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                            unfocusedIndicatorColor = MaterialTheme.extendedColors.divider
+                        )
                     )
-                )
+                    IconButton(
+                        onClick = { commitNewListItem() },
+                        enabled = newListItem.isNotBlank(),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = "Добавить пункт",
+                            tint = if (newListItem.isNotBlank()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
             }
         }
     }
