@@ -98,6 +98,7 @@ fun NotesScreen(viewModel: NotesViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var editor by remember { mutableStateOf<NoteEditorState?>(null) }
     var confirmClearCompleted by remember { mutableStateOf(false) }
+    var pendingDeleteNote by remember { mutableStateOf<NoteEntity?>(null) }
     var voiceConfirm by rememberSaveable(stateSaver = NoteVoiceDraftSaver) {
         mutableStateOf(null)
     }
@@ -134,6 +135,18 @@ fun NotesScreen(viewModel: NotesViewModel) {
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold
                     )
+                },
+                actions = {
+                    IconButton(
+                        onClick = { confirmClearCompleted = true },
+                        modifier = Modifier.testTag(TestTags.CLEAR_COMPLETED_NOTES)
+                    ) {
+                        Icon(
+                            Icons.Outlined.DeleteSweep,
+                            contentDescription = "Очистить выполненные пункты",
+                            tint = muted
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -188,31 +201,12 @@ fun NotesScreen(viewModel: NotesViewModel) {
                 )
             ) {
                 item(key = "notes_list_header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 4.dp, end = 0.dp, top = 4.dp, bottom = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Все заметки",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = muted
-                        )
-                        if (state.completedItemCount > 0) {
-                            IconButton(
-                                onClick = { confirmClearCompleted = true },
-                                modifier = Modifier.testTag(TestTags.CLEAR_COMPLETED_NOTES)
-                            ) {
-                                Icon(
-                                    Icons.Outlined.DeleteSweep,
-                                    contentDescription = "Очистить выполненные пункты",
-                                    tint = muted
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = "Все заметки",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = muted,
+                        modifier = Modifier.padding(start = 4.dp, end = 0.dp, top = 4.dp, bottom = 4.dp)
+                    )
                 }
                 state.groups.forEach { group ->
                     item(key = "theme_${group.theme.name}") {
@@ -267,8 +261,8 @@ fun NotesScreen(viewModel: NotesViewModel) {
             },
             onDelete = if (current is NoteEditorState.Edit) {
                 { note ->
-                    viewModel.deleteNote(note)
                     editor = null
+                    pendingDeleteNote = note
                 }
             } else {
                 null
@@ -327,8 +321,12 @@ fun NotesScreen(viewModel: NotesViewModel) {
             title = { Text("Очистить выполненные пункты?") },
             text = {
                 Text(
-                    "Будут удалены все отмеченные пункты во всех заметках " +
-                        "(${state.completedItemCount})."
+                    if (state.completedItemCount > 0) {
+                        "Будут удалены все отмеченные пункты во всех заметках " +
+                            "(${state.completedItemCount})."
+                    } else {
+                        "Сейчас нет отмеченных пунктов. Нажмите «Очистить», чтобы проверить снова."
+                    }
                 )
             },
             confirmButton = {
@@ -341,6 +339,27 @@ fun NotesScreen(viewModel: NotesViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { confirmClearCompleted = false }) { Text("Отмена") }
+            }
+        )
+    }
+
+    pendingDeleteNote?.let { note ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteNote = null },
+            title = { Text("Удалить заметку?") },
+            text = {
+                Text("Заметка «${note.title}» будет удалена без возможности восстановления.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteNote(note)
+                        pendingDeleteNote = null
+                    }
+                ) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteNote = null }) { Text("Отмена") }
             }
         )
     }

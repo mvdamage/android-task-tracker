@@ -868,6 +868,184 @@ internal fun CreateTaskFromPrescriptionSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+internal fun CreateTaskFromAnalysisSheet(
+    analysis: HealthAnalysisEntity,
+    onDismiss: () -> Unit,
+    onCreate: (
+        dueDateEpochDay: Long?,
+        dueTimeMinutes: Int?,
+        recurrenceType: RecurrenceType
+    ) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var dueMode by remember {
+        mutableStateOf(
+            if (analysis.plannedDateEpochDay != null) {
+                CreateTaskDueMode.DATE
+            } else {
+                CreateTaskDueMode.DAYS_AHEAD
+            }
+        )
+    }
+    var daysAheadText by remember { mutableStateOf("1") }
+    var dueDate by remember {
+        mutableStateOf(analysis.plannedDateEpochDay ?: DateUtils.todayEpochDay())
+    }
+    var timeEnabled by remember {
+        mutableStateOf(analysis.plannedTimeMinutes != null)
+    }
+    var hourText by remember {
+        mutableStateOf(((analysis.plannedTimeMinutes ?: 9 * 60) / 60).toString())
+    }
+    var minuteText by remember {
+        mutableStateOf(((analysis.plannedTimeMinutes ?: 9 * 60) % 60).toString())
+    }
+    var recurrence by remember { mutableStateOf(RecurrenceType.NONE) }
+    var pickingDate by remember { mutableStateOf(false) }
+    val previewTitle = HealthRules.analysisTaskTitle(analysis.kind, analysis.title)
+    val daysAhead = daysAheadText.toIntOrNull()
+    val duePreview = when (dueMode) {
+        CreateTaskDueMode.DAYS_AHEAD ->
+            daysAhead?.let { HealthRules.dueDateFromDaysAhead(it) }
+        CreateTaskDueMode.DATE -> dueDate
+    }
+    val canCreate = when (dueMode) {
+        CreateTaskDueMode.DAYS_AHEAD -> daysAhead != null && daysAhead >= 1
+        CreateTaskDueMode.DATE -> true
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Создать задачу", style = MaterialTheme.typography.titleLarge)
+                Row {
+                    TextButton(onClick = onDismiss) { Text("Отмена") }
+                    TextButton(
+                        enabled = canCreate,
+                        onClick = {
+                            val time = if (timeEnabled) {
+                                val h = hourText.toIntOrNull()?.coerceIn(0, 23) ?: 9
+                                val m = minuteText.toIntOrNull()?.coerceIn(0, 59) ?: 0
+                                h * 60 + m
+                            } else {
+                                null
+                            }
+                            onCreate(duePreview, time, recurrence)
+                        }
+                    ) { Text("Создать") }
+                }
+            }
+            Text(previewTitle, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(12.dp))
+            EditorSectionTitle("Срок")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = dueMode == CreateTaskDueMode.DAYS_AHEAD,
+                    onClick = { dueMode = CreateTaskDueMode.DAYS_AHEAD },
+                    label = { Text("Через N дней") }
+                )
+                FilterChip(
+                    selected = dueMode == CreateTaskDueMode.DATE,
+                    onClick = { dueMode = CreateTaskDueMode.DATE },
+                    label = { Text("На дату") }
+                )
+            }
+            if (dueMode == CreateTaskDueMode.DAYS_AHEAD) {
+                OutlinedTextField(
+                    value = daysAheadText,
+                    onValueChange = { daysAheadText = it.filter { ch -> ch.isDigit() }.take(3) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Через сколько дней") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    colors = healthFieldColors()
+                )
+            } else {
+                TextButton(onClick = { pickingDate = true }) {
+                    Text("Дата: ${DateUtils.formatShort(dueDate)}")
+                }
+            }
+            duePreview?.let {
+                Text(
+                    "Будет: ${DateUtils.formatShort(it)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            FilterChip(
+                selected = timeEnabled,
+                onClick = { timeEnabled = !timeEnabled },
+                label = { Text("Указать время") }
+            )
+            if (timeEnabled) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = hourText,
+                        onValueChange = { hourText = it.filter { ch -> ch.isDigit() }.take(2) },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Час") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        colors = healthFieldColors()
+                    )
+                    OutlinedTextField(
+                        value = minuteText,
+                        onValueChange = { minuteText = it.filter { ch -> ch.isDigit() }.take(2) },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Мин") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        colors = healthFieldColors()
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            EditorSectionTitle("Повтор")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    RecurrenceType.NONE,
+                    RecurrenceType.DAILY,
+                    RecurrenceType.WEEKLY,
+                    RecurrenceType.MONTHLY
+                ).forEach { option ->
+                    FilterChip(
+                        selected = recurrence == option,
+                        onClick = { recurrence = option },
+                        label = { Text(option.label) }
+                    )
+                }
+            }
+        }
+    }
+
+    if (pickingDate) {
+        HealthDatePickerDialog(
+            initialEpochDay = dueDate,
+            allowClear = false,
+            onDismiss = { pickingDate = false },
+            onConfirm = { day ->
+                if (day != null) dueDate = day
+                pickingDate = false
+            }
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HealthDatePickerDialog(

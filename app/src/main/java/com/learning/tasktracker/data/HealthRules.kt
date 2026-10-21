@@ -33,6 +33,14 @@ object HealthRules {
         return "Приём: $base"
     }
 
+    fun analysisTaskTitle(kind: HealthAnalysisKind, analysisTitle: String): String {
+        val base = analysisTitle.trim().ifEmpty { "без названия" }
+        return when (kind) {
+            HealthAnalysisKind.DOCTOR -> doctorVisitTaskTitle(base)
+            HealthAnalysisKind.LAB -> "Анализ: $base"
+        }
+    }
+
     fun taskNotesFor(personName: String): String {
         val name = personName.trim()
         return if (name.isEmpty()) "" else "Здоровье: $name"

@@ -67,6 +67,7 @@ private sealed class HealthDialog {
     data class AddPrescriptionForVisit(val visit: HealthAnalysisEntity) : HealthDialog()
     data class EditPrescription(val prescription: HealthPrescriptionEntity) : HealthDialog()
     data class CreateTask(val prescription: HealthPrescriptionEntity) : HealthDialog()
+    data class CreateTaskFromAnalysis(val analysis: HealthAnalysisEntity) : HealthDialog()
     data class ConfirmDeletePerson(val person: HealthPersonEntity) : HealthDialog()
     data object DoctorVisitHistory : HealthDialog()
 }
@@ -244,6 +245,9 @@ fun HealthScreen(viewModel: HealthViewModel) {
                             AnalysisRow(
                                 analysis = analysis,
                                 onClick = { dialog = HealthDialog.EditAnalysis(analysis) },
+                                onCreateTask = {
+                                    dialog = HealthDialog.CreateTaskFromAnalysis(analysis)
+                                },
                                 onAddPrescription = if (analysis.kind == HealthAnalysisKind.DOCTOR) {
                                     {
                                         dialog = HealthDialog.AddPrescriptionForVisit(analysis)
@@ -444,6 +448,26 @@ fun HealthScreen(viewModel: HealthViewModel) {
                 }
             }
         )
+        is HealthDialog.CreateTaskFromAnalysis -> CreateTaskFromAnalysisSheet(
+            analysis = d.analysis,
+            onDismiss = { dialog = null },
+            onCreate = { due, time, recurrence ->
+                viewModel.createTaskFromAnalysis(
+                    analysis = d.analysis,
+                    dueDateEpochDay = due,
+                    dueTimeMinutes = time,
+                    recurrenceType = recurrence
+                ) { ok ->
+                    dialog = null
+                    scope.launch {
+                        snackbar.showSnackbar(
+                            if (ok) "Задача добавлена в список дел"
+                            else "Не удалось создать задачу"
+                        )
+                    }
+                }
+            }
+        )
         HealthDialog.DoctorVisitHistory -> DoctorVisitHistorySheet(
             history = state.doctorVisitHistory,
             onDismiss = { dialog = null },
@@ -550,6 +574,7 @@ private fun SectionHeader(
 private fun AnalysisRow(
     analysis: HealthAnalysisEntity,
     onClick: () -> Unit,
+    onCreateTask: () -> Unit,
     onAddPrescription: (() -> Unit)? = null
 ) {
     val today = DateUtils.todayEpochDay()
@@ -587,6 +612,7 @@ private fun AnalysisRow(
                             append(DateUtils.formatTime(minutes))
                         }
                     }
+                    if (analysis.linkedTaskId != null) append(" · есть задача")
                 }
                 Text(
                     subtitle,
@@ -598,8 +624,11 @@ private fun AnalysisRow(
                     }
                 )
             }
-            if (onAddPrescription != null) {
-                TextButton(onClick = onAddPrescription) { Text("Назначение") }
+            Row {
+                TextButton(onClick = onCreateTask) { Text("Задача") }
+                if (onAddPrescription != null) {
+                    TextButton(onClick = onAddPrescription) { Text("Назначение") }
+                }
             }
         }
     }

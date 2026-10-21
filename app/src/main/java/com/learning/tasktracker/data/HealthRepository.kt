@@ -303,4 +303,61 @@ class HealthRepository(
         )
         return taskId
     }
+
+    /**
+     * Creates (or updates) a TASK for a lab analysis / doctor visit and stores [HealthAnalysisEntity.linkedTaskId].
+     */
+    suspend fun createTaskFromAnalysis(
+        analysis: HealthAnalysisEntity,
+        personName: String,
+        dueDateEpochDay: Long?,
+        dueTimeMinutes: Int? = null,
+        recurrenceType: RecurrenceType = RecurrenceType.NONE,
+        recurrenceWeekdayMask: Int = 0,
+        recurrenceEndEpochDay: Long? = null
+    ): Long {
+        val current = dao.getAnalysis(analysis.id) ?: return -1L
+        val title = HealthRules.analysisTaskTitle(current.kind, current.title)
+        val notes = HealthRules.taskNotesFor(personName)
+        val existing = current.linkedTaskId?.let { taskRepository.getById(it) }
+        if (existing != null) {
+            taskRepository.update(
+                existing.copy(
+                    title = title,
+                    notes = notes,
+                    dueDateEpochDay = dueDateEpochDay,
+                    dueTimeMinutes = dueTimeMinutes,
+                    dueTimeEndMinutes = null,
+                    recurrenceType = recurrenceType,
+                    recurrenceWeekdayMask = recurrenceWeekdayMask,
+                    recurrenceEndEpochDay = recurrenceEndEpochDay,
+                    isDone = false,
+                    kind = TaskKind.TASK
+                )
+            )
+            return existing.id
+        }
+        val taskId = taskRepository.add(
+            title = title,
+            notes = notes,
+            priority = Priority.MEDIUM,
+            dueDateEpochDay = dueDateEpochDay,
+            recurrenceType = recurrenceType,
+            recurrenceWeekdayMask = recurrenceWeekdayMask,
+            recurrenceEndEpochDay = recurrenceEndEpochDay,
+            dueTimeMinutes = dueTimeMinutes,
+            dueTimeEndMinutes = null,
+            kind = TaskKind.TASK
+        )
+        if (taskId <= 0L) return -1L
+        dao.updateAnalysis(
+            current.copy(
+                linkedTaskId = taskId,
+                plannedDateEpochDay = dueDateEpochDay ?: current.plannedDateEpochDay,
+                plannedTimeMinutes = dueTimeMinutes ?: current.plannedTimeMinutes,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        return taskId
+    }
 }

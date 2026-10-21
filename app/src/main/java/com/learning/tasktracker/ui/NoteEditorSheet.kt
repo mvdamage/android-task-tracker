@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -108,7 +109,6 @@ internal fun NoteEditorSheet(
         }
     }
     var newListItem by remember(state) { mutableStateOf("") }
-    var confirmDelete by remember { mutableStateOf(false) }
     var voiceEmptyError by remember { mutableStateOf(false) }
     val voiceSession = rememberVoiceCaptureSession(
         onTextRecognized = { text ->
@@ -167,7 +167,7 @@ internal fun NoteEditorSheet(
                 TextButton(onClick = onDismiss) { Text("Отмена") }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (existing != null && onDelete != null) {
-                        IconButton(onClick = { confirmDelete = true }) {
+                        IconButton(onClick = { onDelete(existing) }) {
                             Icon(
                                 Icons.Outlined.Delete,
                                 contentDescription = "Удалить заметку",
@@ -331,7 +331,17 @@ internal fun NoteEditorSheet(
                             maxLines = 6,
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 8.dp),
+                                .padding(horizontal = 8.dp)
+                                .onFocusChanged { focusState ->
+                                    if (!focusState.isFocused) {
+                                        val trimmed = row.text.trim()
+                                        if (trimmed.isEmpty()) {
+                                            // keep empty while editing; blank rows dropped on save
+                                        } else if (trimmed != row.text) {
+                                            listRows[index] = row.copy(text = trimmed)
+                                        }
+                                    }
+                                },
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = MaterialTheme.colorScheme.surface,
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -369,7 +379,13 @@ internal fun NoteEditorSheet(
                         singleLine = false,
                         minLines = 1,
                         maxLines = 6,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .onFocusChanged { focusState ->
+                                if (!focusState.isFocused) {
+                                    commitNewListItem()
+                                }
+                            },
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.surface,
                             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -418,25 +434,6 @@ internal fun NoteEditorSheet(
                 TextButton(onClick = { voiceEmptyError = false }) {
                     Text(stringResource(R.string.voice_ok))
                 }
-            }
-        )
-    }
-
-    if (confirmDelete && existing != null && onDelete != null) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить заметку?") },
-            text = { Text("Заметка «${existing.title}» будет удалена без возможности восстановления.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete(existing)
-                        confirmDelete = false
-                    }
-                ) { Text("Удалить") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Отмена") }
             }
         )
     }

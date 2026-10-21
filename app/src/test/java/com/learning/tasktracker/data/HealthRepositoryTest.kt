@@ -65,6 +65,35 @@ class HealthRepositoryTest {
     }
 
     @Test
+    fun createTaskFromAnalysis_lab_appearsInTaskList() = runTest {
+        val personId = healthRepo.addPerson("Марина")
+        val analysisId = healthRepo.addAnalysis(
+            personId = personId,
+            kind = HealthAnalysisKind.LAB,
+            title = "Общий анализ крови",
+            status = HealthAnalysisStatus.PLANNED,
+            plannedDateEpochDay = DateUtils.todayEpochDay() + 1
+        )
+        val analysis = healthRepo.observeSnapshot().first()
+            .analyses.first { it.id == analysisId }
+        val due = DateUtils.todayEpochDay() + 3
+        val taskId = healthRepo.createTaskFromAnalysis(
+            analysis = analysis,
+            personName = "Марина",
+            dueDateEpochDay = due,
+            dueTimeMinutes = 10 * 60
+        )
+        assertTrue(taskId > 0)
+        val task = taskRepo.getById(taskId)!!
+        assertEquals("Анализ: Общий анализ крови", task.title)
+        assertEquals(due, task.dueDateEpochDay)
+        assertEquals(10 * 60, task.dueTimeMinutes)
+        val linked = healthRepo.observeSnapshot().first()
+            .analyses.first { it.id == analysisId }
+        assertEquals(taskId, linked.linkedTaskId)
+    }
+
+    @Test
     fun plannedDoctorVisit_createsVisibleTaskWithTime() = runTest {
         val personId = healthRepo.addPerson("Марина")
         val due = DateUtils.todayEpochDay() + 2

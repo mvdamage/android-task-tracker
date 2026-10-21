@@ -283,6 +283,28 @@ class HealthViewModel(
         }
     }
 
+    fun createTaskFromAnalysis(
+        analysis: HealthAnalysisEntity,
+        dueDateEpochDay: Long?,
+        dueTimeMinutes: Int?,
+        recurrenceType: RecurrenceType,
+        recurrenceWeekdayMask: Int = 0,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        val personName = uiState.value.selectedPerson?.name.orEmpty()
+        viewModelScope.launch {
+            val taskId = repository.createTaskFromAnalysis(
+                analysis = analysis,
+                personName = personName,
+                dueDateEpochDay = dueDateEpochDay,
+                dueTimeMinutes = dueTimeMinutes,
+                recurrenceType = recurrenceType,
+                recurrenceWeekdayMask = recurrenceWeekdayMask
+            )
+            onResult(taskId > 0L)
+        }
+    }
+
     class Factory(
         private val repository: HealthRepository
     ) : ViewModelProvider.Factory {
