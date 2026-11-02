@@ -90,7 +90,9 @@ internal fun NoteEditorSheet(
     state: NoteEditorState,
     onDismiss: () -> Unit,
     onSave: (NoteEditorResult) -> Unit,
-    onDelete: ((NoteEntity) -> Unit)? = null
+    onDelete: ((NoteEntity) -> Unit)? = null,
+    /** Persist note without closing the sheet (e.g. after confirming a list item). */
+    onSaveDraft: ((NoteEditorResult) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val existing = (state as? NoteEditorState.Edit)?.note
@@ -141,8 +143,22 @@ internal fun NoteEditorSheet(
             body = body,
             format = format,
             theme = theme,
-            listItems = listRows.map { NoteDraftListItem(it.text, it.isChecked) }
+            listItems = listRows
+                .map { NoteDraftListItem(it.text.trim(), it.isChecked) }
+                .filter { it.text.isNotEmpty() }
         )
+    }
+
+    fun persistListItem(index: Int) {
+        if (index !in listRows.indices) return
+        val row = listRows[index]
+        val trimmed = row.text.trim()
+        if (trimmed.isEmpty()) return
+        if (trimmed != row.text) {
+            listRows[index] = row.copy(text = trimmed)
+        }
+        if (title.isBlank()) return
+        onSaveDraft?.invoke(buildResult())
     }
 
     ModalBottomSheet(
@@ -357,6 +373,21 @@ internal fun NoteEditorSheet(
                             )
                         )
                         IconButton(
+                            onClick = { persistListItem(index) },
+                            enabled = row.text.isNotBlank() && title.isNotBlank(),
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = "Сохранить пункт",
+                                tint = if (row.text.isNotBlank() && title.isNotBlank()) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                        IconButton(
                             onClick = { listRows.removeAt(index) },
                             modifier = Modifier.padding(top = 4.dp)
                         ) {
@@ -404,14 +435,19 @@ internal fun NoteEditorSheet(
                         )
                     }
                     IconButton(
-                        onClick = { commitNewListItem() },
-                        enabled = newListItem.isNotBlank(),
+                        onClick = {
+                            commitNewListItem()
+                            if (title.isNotBlank() && listRows.any { it.text.isNotBlank() }) {
+                                onSaveDraft?.invoke(buildResult())
+                            }
+                        },
+                        enabled = newListItem.isNotBlank() && title.isNotBlank(),
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
                         Icon(
                             Icons.Filled.Check,
                             contentDescription = "Добавить пункт",
-                            tint = if (newListItem.isNotBlank()) {
+                            tint = if (newListItem.isNotBlank() && title.isNotBlank()) {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant

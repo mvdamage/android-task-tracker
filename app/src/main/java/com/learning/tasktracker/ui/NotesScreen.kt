@@ -259,6 +259,20 @@ fun NotesScreen(viewModel: NotesViewModel) {
                 }
                 editor = null
             },
+            onSaveDraft = if (current is NoteEditorState.Edit) {
+                { result ->
+                    viewModel.updateNote(
+                        note = current.note,
+                        title = result.title,
+                        body = result.body,
+                        format = result.format,
+                        theme = result.theme,
+                        listItems = result.listItems
+                    )
+                }
+            } else {
+                null
+            },
             onDelete = if (current is NoteEditorState.Edit) {
                 { note ->
                     editor = null
