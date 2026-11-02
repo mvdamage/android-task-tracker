@@ -62,6 +62,14 @@ class Converters {
         HealthPrescriptionType.valueOf(value)
 
     @TypeConverter
+    fun fromDoctorVisitCategory(value: DoctorVisitCategory): String = value.name
+
+    @TypeConverter
+    fun toDoctorVisitCategory(value: String): DoctorVisitCategory =
+        runCatching { DoctorVisitCategory.valueOf(value) }
+            .getOrDefault(DoctorVisitCategory.OTHER)
+
+    @TypeConverter
     fun fromFloatingOccurrence(value: FloatingOccurrence?): String? = value?.name
 
     @TypeConverter
@@ -82,7 +90,7 @@ class Converters {
         HealthPrescriptionEntity::class,
         HealthPrescriptionTaskLinkEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -368,6 +376,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE health_analyses ADD COLUMN doctorCategory TEXT NOT NULL DEFAULT 'OTHER'"
+                )
+            }
+        }
+
         private val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -440,7 +456,8 @@ abstract class AppDatabase : RoomDatabase() {
             MIGRATION_13_14,
             MIGRATION_14_15,
             MIGRATION_15_16,
-            MIGRATION_16_17
+            MIGRATION_16_17,
+            MIGRATION_17_18
         )
 
         fun get(context: Context): AppDatabase {

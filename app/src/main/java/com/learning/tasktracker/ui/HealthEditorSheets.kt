@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.learning.tasktracker.data.DateUtils
+import com.learning.tasktracker.data.DoctorVisitCategory
 import com.learning.tasktracker.data.HealthAnalysisEntity
 import com.learning.tasktracker.data.HealthAnalysisKind
 import com.learning.tasktracker.data.HealthAnalysisStatus
@@ -168,7 +169,8 @@ internal fun AnalysisEditorSheet(
         plannedDateEpochDay: Long?,
         plannedTimeMinutes: Int?,
         doneDateEpochDay: Long?,
-        comment: String
+        comment: String,
+        doctorCategory: DoctorVisitCategory
     ) -> Unit,
     onDelete: ((HealthAnalysisEntity) -> Unit)? = null
 ) {
@@ -178,6 +180,9 @@ internal fun AnalysisEditorSheet(
         mutableStateOf(existing?.kind ?: HealthAnalysisKind.LAB)
     }
     var title by remember(state) { mutableStateOf(existing?.title.orEmpty()) }
+    var doctorCategory by remember(state) {
+        mutableStateOf(existing?.doctorCategory ?: DoctorVisitCategory.OTHER)
+    }
     var status by remember(state) {
         mutableStateOf(existing?.status ?: HealthAnalysisStatus.PLANNED)
     }
@@ -256,7 +261,12 @@ internal fun AnalysisEditorSheet(
                                 plannedDate,
                                 resolvedPlannedTime(),
                                 doneDate,
-                                comment
+                                comment,
+                                if (kind == HealthAnalysisKind.DOCTOR) {
+                                    doctorCategory
+                                } else {
+                                    DoctorVisitCategory.OTHER
+                                }
                             )
                         },
                         enabled = title.isNotBlank()
@@ -281,6 +291,22 @@ internal fun AnalysisEditorSheet(
                         onClick = { kind = option },
                         label = { Text(option.label) }
                     )
+                }
+            }
+            if (kind == HealthAnalysisKind.DOCTOR) {
+                Spacer(Modifier.height(8.dp))
+                EditorSectionTitle("Категория")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    DoctorVisitCategory.entries.forEach { option ->
+                        FilterChip(
+                            selected = doctorCategory == option,
+                            onClick = { doctorCategory = option },
+                            label = { Text(option.label) }
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))

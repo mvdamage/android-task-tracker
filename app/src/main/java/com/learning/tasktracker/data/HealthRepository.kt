@@ -61,7 +61,8 @@ class HealthRepository(
         plannedDateEpochDay: Long? = null,
         plannedTimeMinutes: Int? = null,
         doneDateEpochDay: Long? = null,
-        comment: String = ""
+        comment: String = "",
+        doctorCategory: DoctorVisitCategory = DoctorVisitCategory.OTHER
     ): Long {
         val normalized = HealthRules.normalizeTitle(title) ?: return -1L
         if (dao.getPerson(personId) == null) return -1L
@@ -75,6 +76,8 @@ class HealthRepository(
             } else {
                 null
             }
+        val resolvedCategory =
+            if (kind == HealthAnalysisKind.DOCTOR) doctorCategory else DoctorVisitCategory.OTHER
         val now = System.currentTimeMillis()
         val analysisId = dao.insertAnalysis(
             HealthAnalysisEntity(
@@ -86,6 +89,7 @@ class HealthRepository(
                 plannedTimeMinutes = resolvedTime,
                 doneDateEpochDay = resolvedDone,
                 comment = comment.trim(),
+                doctorCategory = resolvedCategory,
                 createdAt = now,
                 updatedAt = now
             )
@@ -105,7 +109,8 @@ class HealthRepository(
         plannedDateEpochDay: Long?,
         plannedTimeMinutes: Int? = analysis.plannedTimeMinutes,
         doneDateEpochDay: Long?,
-        comment: String
+        comment: String,
+        doctorCategory: DoctorVisitCategory = analysis.doctorCategory
     ) {
         val normalized = HealthRules.normalizeTitle(title) ?: return
         val resolvedDone = when (status) {
@@ -118,6 +123,8 @@ class HealthRepository(
             } else {
                 null
             }
+        val resolvedCategory =
+            if (kind == HealthAnalysisKind.DOCTOR) doctorCategory else DoctorVisitCategory.OTHER
         val updated = analysis.copy(
             kind = kind,
             title = normalized,
@@ -126,6 +133,7 @@ class HealthRepository(
             plannedTimeMinutes = resolvedTime,
             doneDateEpochDay = resolvedDone,
             comment = comment.trim(),
+            doctorCategory = resolvedCategory,
             updatedAt = System.currentTimeMillis()
         )
         dao.updateAnalysis(updated)

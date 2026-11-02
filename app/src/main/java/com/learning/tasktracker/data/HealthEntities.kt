@@ -36,6 +36,8 @@ data class HealthAnalysisEntity(
     val plannedTimeMinutes: Int? = null,
     val doneDateEpochDay: Long? = null,
     val comment: String = "",
+    /** Specialty for doctor visits; ignored for lab analyses. */
+    val doctorCategory: DoctorVisitCategory = DoctorVisitCategory.OTHER,
     /** Task created for a planned doctor visit; kept in sync on update. */
     val linkedTaskId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),

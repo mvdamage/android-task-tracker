@@ -33,11 +33,12 @@ import com.learning.tasktracker.ui.theme.extendedColors
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DoctorVisitHistorySheet(
-    history: List<DoctorVisitHistoryItem>,
+    groups: List<DoctorVisitHistoryGroup>,
     onDismiss: () -> Unit,
     onOpenVisit: (HealthAnalysisEntity) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val totalCount = groups.sumOf { it.items.size }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
@@ -55,14 +56,23 @@ internal fun DoctorVisitHistorySheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "История приёмов",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "История приёмов",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (totalCount > 0) {
+                        Text(
+                            text = "По категориям · $totalCount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 TextButton(onClick = onDismiss) { Text("Закрыть") }
             }
-            if (history.isEmpty()) {
+            if (groups.isEmpty()) {
                 Text(
                     text = "Пока нет состоявшихся приёмов.\nОтметьте приём как «Состоялся», чтобы он появился здесь.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -73,15 +83,26 @@ internal fun DoctorVisitHistorySheet(
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)
                 ) {
-                    items(history, key = { it.visit.id }) { item ->
-                        DoctorVisitHistoryRow(
-                            item = item,
-                            onClick = { onOpenVisit(item.visit) }
-                        )
-                        HorizontalDivider(
-                            color = MaterialTheme.extendedColors.divider,
-                            thickness = 0.5.dp
-                        )
+                    groups.forEach { group ->
+                        item(key = "cat_${group.category.name}") {
+                            Text(
+                                text = "${group.category.label} (${group.items.size})",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                            )
+                        }
+                        items(group.items, key = { it.visit.id }) { item ->
+                            DoctorVisitHistoryRow(
+                                item = item,
+                                onClick = { onOpenVisit(item.visit) }
+                            )
+                            HorizontalDivider(
+                                color = MaterialTheme.extendedColors.divider,
+                                thickness = 0.5.dp
+                            )
+                        }
                     }
                 }
             }

@@ -65,6 +65,34 @@ class HealthRepositoryTest {
     }
 
     @Test
+    fun doctorVisit_storesCategory_andGroupsInHistory() = runTest {
+        val personId = healthRepo.addPerson("Марина")
+        healthRepo.addAnalysis(
+            personId = personId,
+            kind = HealthAnalysisKind.DOCTOR,
+            title = "Чистка",
+            status = HealthAnalysisStatus.DONE,
+            doneDateEpochDay = DateUtils.todayEpochDay(),
+            doctorCategory = DoctorVisitCategory.DENTISTRY
+        )
+        healthRepo.addAnalysis(
+            personId = personId,
+            kind = HealthAnalysisKind.DOCTOR,
+            title = "Проверка зрения",
+            status = HealthAnalysisStatus.DONE,
+            doneDateEpochDay = DateUtils.todayEpochDay() - 1,
+            doctorCategory = DoctorVisitCategory.OPHTHALMOLOGY
+        )
+        val done = healthRepo.observeSnapshot().first().analyses
+            .filter { it.kind == HealthAnalysisKind.DOCTOR && it.status == HealthAnalysisStatus.DONE }
+        assertEquals(2, done.size)
+        assertTrue(done.any { it.doctorCategory == DoctorVisitCategory.DENTISTRY })
+        assertTrue(done.any { it.doctorCategory == DoctorVisitCategory.OPHTHALMOLOGY })
+        val groups = done.groupBy { it.doctorCategory }
+        assertEquals(2, groups.size)
+    }
+
+    @Test
     fun createTaskFromAnalysis_lab_appearsInTaskList() = runTest {
         val personId = healthRepo.addPerson("Марина")
         val analysisId = healthRepo.addAnalysis(

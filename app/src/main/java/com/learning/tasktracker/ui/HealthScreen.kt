@@ -334,17 +334,19 @@ fun HealthScreen(viewModel: HealthViewModel) {
         HealthDialog.AddAnalysis -> AnalysisEditorSheet(
             state = AnalysisEditorState.Create,
             onDismiss = { dialog = null },
-            onSave = { kind, title, status, planned, time, done, comment ->
-                viewModel.addAnalysis(kind, title, status, planned, time, done, comment)
+            onSave = { kind, title, status, planned, time, done, comment, category ->
+                viewModel.addAnalysis(
+                    kind, title, status, planned, time, done, comment, category
+                )
                 dialog = null
             }
         )
         is HealthDialog.EditAnalysis -> AnalysisEditorSheet(
             state = AnalysisEditorState.Edit(d.analysis),
             onDismiss = { dialog = null },
-            onSave = { kind, title, status, planned, time, done, comment ->
+            onSave = { kind, title, status, planned, time, done, comment, category ->
                 viewModel.updateAnalysis(
-                    d.analysis, kind, title, status, planned, time, done, comment
+                    d.analysis, kind, title, status, planned, time, done, comment, category
                 )
                 dialog = null
             },
@@ -469,7 +471,7 @@ fun HealthScreen(viewModel: HealthViewModel) {
             }
         )
         HealthDialog.DoctorVisitHistory -> DoctorVisitHistorySheet(
-            history = state.doctorVisitHistory,
+            groups = state.doctorVisitHistoryGroups,
             onDismiss = { dialog = null },
             onOpenVisit = { visit ->
                 dialog = HealthDialog.EditAnalysis(visit)
@@ -601,6 +603,10 @@ private fun AnalysisRow(
                 )
                 val subtitle = buildString {
                     append(analysis.kind.label)
+                    if (analysis.kind == HealthAnalysisKind.DOCTOR) {
+                        append(" · ")
+                        append(analysis.doctorCategory.label)
+                    }
                     append(" · ")
                     append(analysis.status.labelFor(analysis.kind))
                     if (overdue) append(" · просрочен")

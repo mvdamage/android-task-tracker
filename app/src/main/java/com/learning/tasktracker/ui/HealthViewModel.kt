@@ -3,6 +3,7 @@ package com.learning.tasktracker.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.learning.tasktracker.data.DoctorVisitCategory
 import com.learning.tasktracker.data.HealthAnalysisEntity
 import com.learning.tasktracker.data.HealthAnalysisKind
 import com.learning.tasktracker.data.HealthAnalysisStatus
@@ -24,6 +25,11 @@ data class DoctorVisitHistoryItem(
     val prescriptions: List<HealthPrescriptionEntity>
 )
 
+data class DoctorVisitHistoryGroup(
+    val category: DoctorVisitCategory,
+    val items: List<DoctorVisitHistoryItem>
+)
+
 data class HealthUiState(
     val persons: List<HealthPersonEntity> = emptyList(),
     val selectedPersonId: Long? = null,
@@ -32,6 +38,8 @@ data class HealthUiState(
     val analyses: List<HealthAnalysisEntity> = emptyList(),
     val doctorVisits: List<HealthAnalysisEntity> = emptyList(),
     val doctorVisitHistory: List<DoctorVisitHistoryItem> = emptyList(),
+    /** Completed visits grouped by specialty for the history sheet. */
+    val doctorVisitHistoryGroups: List<DoctorVisitHistoryGroup> = emptyList(),
     val prescriptions: List<HealthPrescriptionEntity> = emptyList(),
     val analysisTitleById: Map<Long, String> = emptyMap(),
     val linkedTaskIdsByPrescription: Map<Long, List<Long>> = emptyMap(),
@@ -83,6 +91,21 @@ class HealthViewModel(
                     prescriptions = prescriptionsByVisitId[visit.id].orEmpty()
                 )
             }
+        val doctorVisitHistoryGroups = doctorVisitHistory
+            .groupBy { it.visit.doctorCategory }
+            .entries
+            .sortedWith(
+                compareByDescending<Map.Entry<DoctorVisitCategory, List<DoctorVisitHistoryItem>>> {
+                    it.value.maxOf { item ->
+                        item.visit.doneDateEpochDay
+                            ?: item.visit.plannedDateEpochDay
+                            ?: Long.MIN_VALUE
+                    }
+                }.thenBy { it.key.label }
+            )
+            .map { (category, items) ->
+                DoctorVisitHistoryGroup(category = category, items = items)
+            }
         HealthUiState(
             persons = persons,
             selectedPersonId = resolvedId,
@@ -90,6 +113,7 @@ class HealthViewModel(
             analyses = activeAnalyses,
             doctorVisits = personAnalyses.filter { it.kind == HealthAnalysisKind.DOCTOR },
             doctorVisitHistory = doctorVisitHistory,
+            doctorVisitHistoryGroups = doctorVisitHistoryGroups,
             prescriptions = personPrescriptions,
             analysisTitleById = personAnalyses.associate { it.id to it.title },
             linkedTaskIdsByPrescription = snapshot.links.groupBy({ it.prescriptionId }, { it.taskId }),
@@ -128,7 +152,8 @@ class HealthViewModel(
         plannedDateEpochDay: Long?,
         plannedTimeMinutes: Int?,
         doneDateEpochDay: Long?,
-        comment: String
+        comment: String,
+        doctorCategory: DoctorVisitCategory = DoctorVisitCategory.OTHER
     ) {
         val personId = selectedPersonId.value ?: return
         viewModelScope.launch {
@@ -140,7 +165,8 @@ class HealthViewModel(
                 plannedDateEpochDay = plannedDateEpochDay,
                 plannedTimeMinutes = plannedTimeMinutes,
                 doneDateEpochDay = doneDateEpochDay,
-                comment = comment
+                comment = comment,
+                doctorCategory = doctorCategory
             )
         }
     }
@@ -153,7 +179,8 @@ class HealthViewModel(
         plannedDateEpochDay: Long?,
         plannedTimeMinutes: Int?,
         doneDateEpochDay: Long?,
-        comment: String
+        comment: String,
+        doctorCategory: DoctorVisitCategory = DoctorVisitCategory.OTHER
     ) {
         viewModelScope.launch {
             repository.updateAnalysis(
@@ -164,7 +191,8 @@ class HealthViewModel(
                 plannedDateEpochDay,
                 plannedTimeMinutes,
                 doneDateEpochDay,
-                comment
+                comment,
+                doctorCategory = doctorCategory
             )
         }
     }
