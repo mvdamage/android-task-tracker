@@ -90,6 +90,37 @@ class RecurrenceDateEditTest {
     }
 
     @Test
+    fun thisOccurrence_onCompleted_doesNotDuplicateSeries() = runTest {
+        val today = DateUtils.todayEpochDay()
+        val id = taskRepo.add(
+            title = "Серия",
+            notes = "",
+            priority = Priority.MEDIUM,
+            dueDateEpochDay = today,
+            recurrenceType = RecurrenceType.DAILY
+        )
+        val original = taskRepo.getById(id)!!
+        taskRepo.toggleDone(original)
+        val afterComplete = taskRepo.observeTasks().first().filter { it.title == "Серия" }
+        assertEquals(2, afterComplete.size) // done + next
+        val done = afterComplete.first { it.id == id }
+        assertTrue(done.isDone)
+        assertFalse(TaskRepository.supportsOccurrenceSplit(done))
+
+        taskRepo.updateRecurringDate(
+            original = done,
+            updated = done.copy(dueDateEpochDay = today + 7),
+            scope = RecurrenceDateEditScope.THIS_OCCURRENCE
+        )
+        val afterDetach = taskRepo.observeTasks().first().filter { it.title == "Серия" }
+        assertEquals(2, afterDetach.size) // no third row
+        val detached = afterDetach.first { it.id == id }
+        assertEquals(today + 7, detached.dueDateEpochDay)
+        assertEquals(RecurrenceType.NONE, detached.recurrenceType)
+        assertTrue(afterDetach.any { it.id != id && it.recurrenceType == RecurrenceType.DAILY })
+    }
+
+    @Test
     fun moveToDay_thisOccurrence_detaches() = runTest {
         val today = DateUtils.todayEpochDay()
         val id = taskRepo.add(

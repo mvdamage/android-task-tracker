@@ -51,6 +51,26 @@ class HealthViewModel(
 ) : ViewModel() {
     private val selectedPersonId = MutableStateFlow<Long?>(null)
 
+    init {
+        // Keep write-path selection in sync with the first available person so
+        // addAnalysis/addPrescription work even when the UI never calls selectPerson
+        // (single-person mode).
+        viewModelScope.launch {
+            repository.observeSnapshot().collect { snapshot ->
+                val persons = snapshot.persons
+                val current = selectedPersonId.value
+                when {
+                    persons.isEmpty() -> {
+                        if (current != null) selectedPersonId.value = null
+                    }
+                    current == null || persons.none { it.id == current } -> {
+                        selectedPersonId.value = persons.first().id
+                    }
+                }
+            }
+        }
+    }
+
     val uiState: StateFlow<HealthUiState> = combine(
         repository.observeSnapshot(),
         selectedPersonId

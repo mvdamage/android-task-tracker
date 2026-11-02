@@ -144,6 +144,18 @@ class TaskRepository(
             update(updated)
             return
         }
+        // Completed occurrences already spawned the next series row on toggleDone.
+        // Detach as a one-off without inserting another continuation (avoids duplicates).
+        if (original.isDone) {
+            update(
+                updated.copy(
+                    recurrenceType = RecurrenceType.NONE,
+                    recurrenceWeekdayMask = 0,
+                    recurrenceEndEpochDay = null
+                )
+            )
+            return
+        }
         val nextDue = DateUtils.nextDueDate(
             originalDue,
             original.recurrenceType,
@@ -256,9 +268,13 @@ class TaskRepository(
     }
 
     companion object {
-        /** TASK/EVENT recurring rows spawn continuations; birthday/holiday do not. */
+        /**
+         * Active TASK/EVENT recurring rows can split into this-occurrence vs series.
+         * Completed rows already spawned the next occurrence — splitting would duplicate.
+         */
         fun supportsOccurrenceSplit(task: TaskEntity): Boolean =
-            task.isRecurring &&
+            !task.isDone &&
+                task.isRecurring &&
                 task.dueDateEpochDay != null &&
                 (task.kind == TaskKind.TASK || task.kind == TaskKind.EVENT)
 
