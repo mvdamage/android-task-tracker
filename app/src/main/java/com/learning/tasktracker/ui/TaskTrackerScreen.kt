@@ -70,11 +70,13 @@ import com.learning.tasktracker.R
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.FloatingHolidayRules
 import com.learning.tasktracker.data.Priority
+import com.learning.tasktracker.data.RecurrenceDateEditScope
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SubtaskEntity
 import com.learning.tasktracker.data.TaskEntity
 import com.learning.tasktracker.data.TaskFilter
 import com.learning.tasktracker.data.TaskKind
+import com.learning.tasktracker.data.TaskRepository
 import com.learning.tasktracker.data.TaskViewMode
 import com.learning.tasktracker.ui.components.AnyDoDivider
 import com.learning.tasktracker.ui.components.CircularTaskCheckbox
@@ -140,6 +142,9 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
     var editor by remember { mutableStateOf<EditorState?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var pendingRecurrenceDateEdit by remember {
+        mutableStateOf<PendingRecurrenceDateEdit?>(null)
+    }
     var voiceConfirm by rememberSaveable(stateSaver = TaskVoiceParseResultSaver) {
         mutableStateOf(null)
     }
@@ -324,7 +329,18 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                                     }
                                     if (event.changes.all { !it.pressed }) {
                                         dragState.finishDrag { task, day ->
-                                            viewModel.moveTaskToDay(task, day)
+                                            if (
+                                                TaskRepository.supportsOccurrenceSplit(task) &&
+                                                day != DateUtils.UNDATED_GROUP_KEY
+                                            ) {
+                                                pendingRecurrenceDateEdit =
+                                                    PendingRecurrenceDateEdit.Move(
+                                                        task = task,
+                                                        targetGroupKey = day
+                                                    )
+                                            } else {
+                                                viewModel.moveTaskToDay(task, day)
+                                            }
                                         }
                                     }
                                 }
@@ -447,23 +463,52 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
                         floatingWeekday = result.floatingWeekday,
                         floatingOccurrence = result.floatingOccurrence
                     )
-                    is EditorState.Edit -> viewModel.updateTask(
-                        task = current.task,
-                        title = result.title,
-                        notes = result.notes,
-                        location = result.location,
-                        priority = result.priority,
-                        kind = result.kind,
-                        dueDateEpochDay = result.dueDateEpochDay,
-                        recurrenceType = result.recurrenceType,
-                        recurrenceWeekdayMask = result.recurrenceWeekdayMask,
-                        recurrenceEndEpochDay = result.recurrenceEndEpochDay,
-                        dueTimeMinutes = result.dueTimeMinutes,
-                        dueTimeEndMinutes = result.dueTimeEndMinutes,
-                        floatingMonth = result.floatingMonth,
-                        floatingWeekday = result.floatingWeekday,
-                        floatingOccurrence = result.floatingOccurrence
-                    )
+                    is EditorState.Edit -> {
+                        val tentative = current.task.copy(
+                            title = result.title.trim(),
+                            notes = result.notes.trim(),
+                            location = result.location,
+                            priority = result.priority,
+                            kind = result.kind,
+                            dueDateEpochDay = result.dueDateEpochDay,
+                            recurrenceType = result.recurrenceType,
+                            recurrenceWeekdayMask = result.recurrenceWeekdayMask,
+                            recurrenceEndEpochDay = result.recurrenceEndEpochDay,
+                            dueTimeMinutes = result.dueTimeMinutes,
+                            dueTimeEndMinutes = result.dueTimeEndMinutes,
+                            floatingMonth = result.floatingMonth,
+                            floatingWeekday = result.floatingWeekday,
+                            floatingOccurrence = result.floatingOccurrence
+                        )
+                        if (
+                            TaskRepository.supportsOccurrenceSplit(current.task) &&
+                            TaskRepository.dateOrTimeChanged(current.task, tentative)
+                        ) {
+                            editor = null
+                            pendingRecurrenceDateEdit = PendingRecurrenceDateEdit.Save(
+                                original = current.task,
+                                result = result
+                            )
+                            return@TaskEditorSheet
+                        }
+                        viewModel.updateTask(
+                            task = current.task,
+                            title = result.title,
+                            notes = result.notes,
+                            location = result.location,
+                            priority = result.priority,
+                            kind = result.kind,
+                            dueDateEpochDay = result.dueDateEpochDay,
+                            recurrenceType = result.recurrenceType,
+                            recurrenceWeekdayMask = result.recurrenceWeekdayMask,
+                            recurrenceEndEpochDay = result.recurrenceEndEpochDay,
+                            dueTimeMinutes = result.dueTimeMinutes,
+                            dueTimeEndMinutes = result.dueTimeEndMinutes,
+                            floatingMonth = result.floatingMonth,
+                            floatingWeekday = result.floatingWeekday,
+                            floatingOccurrence = result.floatingOccurrence
+                        )
+                    }
                 }
                 editor = null
             }
@@ -529,6 +574,88 @@ fun TaskTrackerScreen(viewModel: TaskViewModel) {
             }
         )
     }
+
+    pendingRecurrenceDateEdit?.let { pending ->
+        RecurrenceDateEditDialog(
+            onDismiss = { pendingRecurrenceDateEdit = null },
+            onChoose = { scope ->
+                when (pending) {
+                    is PendingRecurrenceDateEdit.Save -> {
+                        val result = pending.result
+                        viewModel.updateTask(
+                            task = pending.original,
+                            title = result.title,
+                            notes = result.notes,
+                            location = result.location,
+                            priority = result.priority,
+                            kind = result.kind,
+                            dueDateEpochDay = result.dueDateEpochDay,
+                            recurrenceType = result.recurrenceType,
+                            recurrenceWeekdayMask = result.recurrenceWeekdayMask,
+                            recurrenceEndEpochDay = result.recurrenceEndEpochDay,
+                            dueTimeMinutes = result.dueTimeMinutes,
+                            dueTimeEndMinutes = result.dueTimeEndMinutes,
+                            floatingMonth = result.floatingMonth,
+                            floatingWeekday = result.floatingWeekday,
+                            floatingOccurrence = result.floatingOccurrence,
+                            recurrenceDateEditScope = scope
+                        )
+                    }
+                    is PendingRecurrenceDateEdit.Move -> {
+                        viewModel.moveTaskToDay(
+                            task = pending.task,
+                            targetGroupKey = pending.targetGroupKey,
+                            scope = scope
+                        )
+                    }
+                }
+                pendingRecurrenceDateEdit = null
+            }
+        )
+    }
+}
+
+private sealed class PendingRecurrenceDateEdit {
+    data class Save(
+        val original: TaskEntity,
+        val result: TaskEditorResult
+    ) : PendingRecurrenceDateEdit()
+
+    data class Move(
+        val task: TaskEntity,
+        val targetGroupKey: Long
+    ) : PendingRecurrenceDateEdit()
+}
+
+@Composable
+private fun RecurrenceDateEditDialog(
+    onDismiss: () -> Unit,
+    onChoose: (RecurrenceDateEditScope) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Изменить дату повторяющейся задачи?") },
+        text = {
+            Text(
+                "Изменить только эту задачу или всю серию повторений?"
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onChoose(RecurrenceDateEditScope.THIS_OCCURRENCE) }) {
+                Text("Только эту")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { onChoose(RecurrenceDateEditScope.SERIES) }) {
+                    Text("Всю серию")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Отмена")
+                }
+            }
+        }
+    )
 }
 
 @Composable

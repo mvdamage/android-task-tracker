@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.learning.tasktracker.data.DateUtils
 import com.learning.tasktracker.data.FloatingOccurrence
 import com.learning.tasktracker.data.Priority
+import com.learning.tasktracker.data.RecurrenceDateEditScope
 import com.learning.tasktracker.data.RecurrenceType
 import com.learning.tasktracker.data.SettingsStore
 import com.learning.tasktracker.data.SubtaskEntity
@@ -277,28 +278,34 @@ class TaskViewModel(
         location: String = "",
         floatingMonth: Int? = null,
         floatingWeekday: Int? = null,
-        floatingOccurrence: FloatingOccurrence? = null
+        floatingOccurrence: FloatingOccurrence? = null,
+        recurrenceDateEditScope: RecurrenceDateEditScope = RecurrenceDateEditScope.SERIES
     ) {
         if (title.isBlank()) return
         viewModelScope.launch {
-            repository.update(
-                task.copy(
-                    title = title.trim(),
-                    notes = notes.trim(),
-                    location = location,
-                    priority = priority,
-                    kind = kind,
-                    dueDateEpochDay = dueDateEpochDay,
-                    recurrenceType = recurrenceType,
-                    recurrenceWeekdayMask = recurrenceWeekdayMask,
-                    recurrenceEndEpochDay = recurrenceEndEpochDay,
-                    dueTimeMinutes = dueTimeMinutes,
-                    dueTimeEndMinutes = dueTimeEndMinutes,
-                    floatingMonth = floatingMonth,
-                    floatingWeekday = floatingWeekday,
-                    floatingOccurrence = floatingOccurrence
-                )
+            val updated = task.copy(
+                title = title.trim(),
+                notes = notes.trim(),
+                location = location,
+                priority = priority,
+                kind = kind,
+                dueDateEpochDay = dueDateEpochDay,
+                recurrenceType = recurrenceType,
+                recurrenceWeekdayMask = recurrenceWeekdayMask,
+                recurrenceEndEpochDay = recurrenceEndEpochDay,
+                dueTimeMinutes = dueTimeMinutes,
+                dueTimeEndMinutes = dueTimeEndMinutes,
+                floatingMonth = floatingMonth,
+                floatingWeekday = floatingWeekday,
+                floatingOccurrence = floatingOccurrence
             )
+            val needsScope = TaskRepository.supportsOccurrenceSplit(task) &&
+                TaskRepository.dateOrTimeChanged(task, updated)
+            if (needsScope) {
+                repository.updateRecurringDate(task, updated, recurrenceDateEditScope)
+            } else {
+                repository.update(updated)
+            }
         }
     }
 
@@ -339,9 +346,13 @@ class TaskViewModel(
         viewModelScope.launch { repository.deleteSubtask(subtask) }
     }
 
-    fun moveTaskToDay(task: TaskEntity, targetGroupKey: Long) {
+    fun moveTaskToDay(
+        task: TaskEntity,
+        targetGroupKey: Long,
+        scope: RecurrenceDateEditScope = RecurrenceDateEditScope.SERIES
+    ) {
         viewModelScope.launch {
-            repository.moveToDay(task, DateUtils.fromGroupKey(targetGroupKey))
+            repository.moveToDay(task, DateUtils.fromGroupKey(targetGroupKey), scope)
         }
     }
 

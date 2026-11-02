@@ -115,7 +115,93 @@ class TaskRepository(
         )
     }
 
-    suspend fun moveToDay(task: TaskEntity, targetEpochDay: Long?) {
+    /**
+     * Applies an edit that may change due date/time of a recurring task.
+     * [RecurrenceDateEditScope.SERIES] — update the current series row as usual.
+     * [RecurrenceDateEditScope.THIS_OCCURRENCE] — detach this row as a one-off with the new
+     * date/time and spawn the next series continuation from the original due date.
+     */
+    suspend fun updateRecurringDate(
+        original: TaskEntity,
+        updated: TaskEntity,
+        scope: RecurrenceDateEditScope
+    ) {
+        when (scope) {
+            RecurrenceDateEditScope.SERIES -> update(updated)
+            RecurrenceDateEditScope.THIS_OCCURRENCE -> detachOccurrenceAndContinueSeries(
+                original = original,
+                updated = updated
+            )
+        }
+    }
+
+    private suspend fun detachOccurrenceAndContinueSeries(
+        original: TaskEntity,
+        updated: TaskEntity
+    ) {
+        val originalDue = original.dueDateEpochDay
+        if (!original.isRecurring || originalDue == null) {
+            update(updated)
+            return
+        }
+        val nextDue = DateUtils.nextDueDate(
+            originalDue,
+            original.recurrenceType,
+            original.recurrenceInterval,
+            original.recurrenceWeekdayMask,
+            original.recurrenceEndEpochDay
+        )
+        // This occurrence becomes a standalone (non-recurring) task with the new date/time.
+        update(
+            updated.copy(
+                recurrenceType = RecurrenceType.NONE,
+                recurrenceWeekdayMask = 0,
+                recurrenceEndEpochDay = null
+            )
+        )
+        if (nextDue == null) return
+        val now = System.currentTimeMillis()
+        val continuation = original.copy(
+            id = 0,
+            isDone = false,
+            title = updated.title.trim().ifEmpty { original.title },
+            notes = updated.notes,
+            location = updated.location,
+            priority = updated.priority,
+            kind = updated.kind,
+            dueDateEpochDay = nextDue,
+            dueTimeMinutes = original.dueTimeMinutes,
+            dueTimeEndMinutes = original.dueTimeEndMinutes,
+            recurrenceType = original.recurrenceType,
+            recurrenceInterval = original.recurrenceInterval,
+            recurrenceWeekdayMask = original.recurrenceWeekdayMask,
+            recurrenceEndEpochDay = original.recurrenceEndEpochDay,
+            floatingMonth = original.floatingMonth,
+            floatingWeekday = original.floatingWeekday,
+            floatingOccurrence = original.floatingOccurrence,
+            createdAt = now,
+            updatedAt = now
+        )
+        val newTaskId = dao.insert(continuation)
+        if (newTaskId <= 0L) return
+        subtaskDao.listForParent(original.id).forEach { subtask ->
+            subtaskDao.insert(
+                subtask.copy(
+                    id = 0,
+                    parentTaskId = newTaskId,
+                    isDone = false,
+                    createdAt = now,
+                    updatedAt = now
+                )
+            )
+        }
+    }
+
+    suspend fun moveToDay(
+        task: TaskEntity,
+        targetEpochDay: Long?,
+        scope: RecurrenceDateEditScope = RecurrenceDateEditScope.SERIES
+    ) {
         if (task.dueDateEpochDay == targetEpochDay) return
         if (targetEpochDay == null) {
             // Calendar items must keep a date (and yearly items keep recurrence).
@@ -136,6 +222,22 @@ class TaskRepository(
             )
             return
         }
+        if (
+            scope == RecurrenceDateEditScope.THIS_OCCURRENCE &&
+            task.isRecurring &&
+            supportsOccurrenceSplit(task)
+        ) {
+            val alignedDue = DateUtils.alignToRecurrence(
+                targetEpochDay,
+                RecurrenceType.NONE,
+                0
+            )
+            detachOccurrenceAndContinueSeries(
+                original = task,
+                updated = task.copy(dueDateEpochDay = alignedDue)
+            )
+            return
+        }
         val alignedDue = DateUtils.alignToRecurrence(
             targetEpochDay,
             task.recurrenceType,
@@ -151,6 +253,19 @@ class TaskRepository(
                 updatedAt = System.currentTimeMillis()
             )
         )
+    }
+
+    companion object {
+        /** TASK/EVENT recurring rows spawn continuations; birthday/holiday do not. */
+        fun supportsOccurrenceSplit(task: TaskEntity): Boolean =
+            task.isRecurring &&
+                task.dueDateEpochDay != null &&
+                (task.kind == TaskKind.TASK || task.kind == TaskKind.EVENT)
+
+        fun dateOrTimeChanged(original: TaskEntity, updated: TaskEntity): Boolean =
+            original.dueDateEpochDay != updated.dueDateEpochDay ||
+                original.dueTimeMinutes != updated.dueTimeMinutes ||
+                original.dueTimeEndMinutes != updated.dueTimeEndMinutes
     }
 
     suspend fun toggleDone(task: TaskEntity) {

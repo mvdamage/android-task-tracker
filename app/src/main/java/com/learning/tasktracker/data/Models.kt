@@ -42,6 +42,14 @@ enum class RecurrenceType(val label: String) {
     CUSTOM_DAYS("Свои дни")
 }
 
+/** How to apply a date/time change on a recurring task. */
+enum class RecurrenceDateEditScope {
+    /** Shift the series anchor (current row keeps recurrence). */
+    SERIES,
+    /** Detach this occurrence as a one-off; spawn the next series continuation. */
+    THIS_OCCURRENCE
+}
+
 enum class NoteFormat(val label: String) {
     TEXT("Текст"),
     LIST("Список")
